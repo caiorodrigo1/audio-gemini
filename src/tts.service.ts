@@ -422,11 +422,11 @@ Formato esperado:
   }
 
   async saveImagePrompts(prompts: string[], outputDir: string): Promise<void> {
-    const fileName = 'image_prompts.txt';
+    const fileName = 'prompts_de_imagem.txt';
     const filePath = path.join(outputDir, fileName);
     
     const content = prompts.map((prompt, index) => 
-      `=== PROMPT ${index + 1} ===\n${prompt}\n`
+      `=== PROMPT ${index + 1} ===\n${prompt}\n=== IMAGEM CORRESPONDENTE: imagem_${index + 1}.jpg ===\n`
     ).join('\n');
 
     await fs.writeFile(filePath, content, 'utf-8');
@@ -523,11 +523,11 @@ Formato esperado:
   }
 
   async saveImage(imageBuffer: Buffer, imageIndex: number, outputDir: string): Promise<void> {
-    const fileName = `image_${imageIndex + 1}.jpg`;
+    const fileName = `imagem_${imageIndex + 1}.jpg`;
     const filePath = path.join(outputDir, fileName);
     
     await fs.writeFile(filePath, imageBuffer);
-    console.log(`🖼️ Imagem salva: ${fileName}`);
+    console.log(`🖼️ Imagem ${imageIndex + 1} salva: ${fileName}`);
   }
 
   private generateUUID(): string {
