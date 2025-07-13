@@ -12,7 +12,17 @@ interface TextChunk {
 @Injectable()
 export class TTSService {
   private readonly openaiApiKey = "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";
-  private readonly whiskToken = "ya29.a0AS3H6NwqSsOtjUwrEJL44ydVim9dbHbGGW_JfKZlxS-vfgRVvi5c4fSu8G4XakRS71SLZQxorh4qWSHeEp0Pjcz19aAfvs7V2lG6YiTY60mpzMxj10fEHLnGkdY64CwzpGGm1Tupd8SR0LuUnN9bfLIrbsEr40p1XMye7deaCo9Vnzctquf-1sxoxYbVNmj6puTR-i5K-7x5yjaPgkIplZ8MWTw4WzIz-GRzQsKgb39mzU6F6GSbGjWEdxgphZjcQ95Er1hw9ZGIWfW6Q6DbUD30qxEA-RtkFj4q13kLTEUqSy2nff0WPnZSp_5PtKGRIble9V8464vYvwaCgYKAVgSARISFQHGX2MicgIRxgKa2nv5CY5DKEbLZA0341";
+  private whiskToken = "ya29.a0AS3H6NwqSsOtjUwrEJL44ydVim9dbHbGGW_JfKZlxS-vfgRVvi5c4fSu8G4XakRS71SLZQxorh4qWSHeEp0Pjcz19aAfvs7V2lG6YiTY60mpzMxj10fEHLnGkdY64CwzpGGm1Tupd8SR0LuUnN9bfLIrbsEr40p1XMye7deaCo9Vnzctquf-1sxoxYbVNmj6puTR-i5K-7x5yjaPgkIplZ8MWTw4WzIz-GRzQsKgb39mzU6F6GSbGjWEdxgphZjcQ95Er1hw9ZGIWfW6Q6DbUD30qxEA-RtkFj4q13kLTEUqSy2nff0WPnZSp_5PtKGRIble9V8464vYvwaCgYKAVgSARISFQHGX2MicgIRxgKa2nv5CY5DKEbLZA0341";
+  private consoleService: any; // Referência para o console service
+
+  setConsoleService(consoleService: any) {
+    this.consoleService = consoleService;
+  }
+
+  updateWhiskToken(newToken: string) {
+    this.whiskToken = newToken;
+    console.log('✅ Token atualizado com sucesso!');
+  }
   
   // private readonly apiKeys = [
   //   "AIzaSyArTATX_unM1LvawzEQ5uU0LDqj0nyewo4",
@@ -545,12 +555,35 @@ Formato esperado:
 
       } catch (error) {
         lastError = error;
+        const isUnauthorized = error.response?.status === 401;
         const isRateLimit = error.response?.status === 429;
         const isServerError = error.response?.status >= 500;
         
         console.error(`❌ Tentativa ${attempt + 1}/${maxRetries} falhou:`, error.message);
         
-        if (isRateLimit || isServerError) {
+        if (isUnauthorized) {
+          console.log(`🔑 Erro de autenticação detectado (401)`);
+          
+          if (this.consoleService && typeof this.consoleService.promptForNewToken === 'function') {
+            try {
+              const newToken = await this.consoleService.promptForNewToken();
+              if (newToken && newToken.length > 10) {
+                this.updateWhiskToken(newToken);
+                console.log(`🔄 Tentando novamente com o novo token...`);
+                continue; // Tentar novamente com novo token
+              } else {
+                console.log(`❌ Token inválido fornecido`);
+                break;
+              }
+            } catch (tokenError) {
+              console.error(`❌ Erro ao obter novo token:`, tokenError.message);
+              break;
+            }
+          } else {
+            console.log(`❌ Console service não disponível para solicitar novo token`);
+            break;
+          }
+        } else if (isRateLimit || isServerError) {
           console.log(`🔄 Erro de rate limit/servidor, tentando novamente...`);
           if (attempt < maxRetries - 1) {
             continue; // Tentar novamente

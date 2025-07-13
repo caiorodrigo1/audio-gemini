@@ -8,7 +8,32 @@ import { promises as fs } from 'fs';
 export class ConsoleService {
   constructor(private readonly ttsService: TTSService) {}
 
+  async promptForNewToken(): Promise<string> {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    return new Promise((resolve) => {
+      console.log('\n🔑 O token atual expirou ou é inválido.');
+      console.log('Por favor, insira um novo token do Google Labs Whisk:');
+      console.log('(Você pode obter um novo token em: https://labs.google/whisk)');
+      
+      rl.question('Novo token: ', (token: string) => {
+        rl.close();
+        const trimmedToken = token.trim();
+        if (trimmedToken.length > 10) {
+          console.log('🔄 Token recebido, atualizando...');
+        }
+        resolve(trimmedToken);
+      });
+    });
+  }
+
   start(): void {
+    // Conectar o TTS service com este console service
+    this.ttsService.setConsoleService(this);
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
