@@ -163,7 +163,27 @@ export class ConsoleService {
       }
     };
 
-    const createDateTimeFolder = (baseDir: string = 'D:\\Canais Dark'): string => {
+    const getNextSequentialNumber = async (baseDir: string): Promise<number> => {
+      try {
+        const entries = await fs.readdir(baseDir, { withFileTypes: true });
+        const folders = entries
+          .filter(entry => entry.isDirectory())
+          .map(entry => entry.name)
+          .filter(name => /^\d{2}/.test(name)) // Pastas que começam com 2 dígitos
+          .map(name => {
+            const match = name.match(/^(\d{2})/);
+            return match ? parseInt(match[1], 10) : 0;
+          });
+        
+        if (folders.length === 0) return 1;
+        return Math.max(...folders) + 1;
+      } catch (error) {
+        // Se a pasta base não existe, retorna 1
+        return 1;
+      }
+    };
+
+    const createDateTimeFolder = async (baseDir: string = 'D:\\Canais Dark'): Promise<string> => {
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -171,14 +191,17 @@ export class ConsoleService {
       const hours = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
       
-      const folderName = `${year}_${month}_${day} ${hours}_${minutes}`;
+      const sequentialNumber = await getNextSequentialNumber(baseDir);
+      const sequentialPart = String(sequentialNumber).padStart(2, '0');
+      
+      const folderName = `${sequentialPart} - ${year}_${month}_${day} ${hours}_${minutes}`;
       return path.join(baseDir, folderName);
     };
 
     const processText = async (text: string, baseDir?: string) => {
       try {
         console.log('\nProcessando texto...');
-        const outputDir = createDateTimeFolder(baseDir);
+        const outputDir = await createDateTimeFolder(baseDir);
         const savedFiles = await this.ttsService.processTextToSpeech(text, outputDir);
         
         console.log('\n✅ Conversão concluída com sucesso!');

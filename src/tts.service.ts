@@ -392,16 +392,65 @@ export class TTSService {
 
     const prompt = `Analise os seguintes trechos de texto e para cada um gere um prompt detalhado para geração de imagem foto realista que represente visualmente a cena principal descrita no trecho.
 
+IMPORTANTE: 
+1. Primeiro identifique o idioma predominante dos textos
+2. Adapte os prompts para refletir a cultura e características visuais típicas desse país/região
+
+EXEMPLOS DE CONTEXTUALIZAÇÃO POR PAÍS/IDIOMA:
+
+- PORTUGUÊS BRASILEIRO: 
+  • Lugares: favelas cariocas, bairros paulistanos, praias de Copacabana, centro histórico de Salvador, subúrbios de BH, interior de MG
+  • Pessoas: diversidade étnica (pardos, negros, brancos, asiáticos), cabelos cacheados/crespos, pele morena, roupas casuais (bermuda, chinelo, camiseta)
+  • Carros: Gol, Palio, Onix, HB20, Civic, táxis amarelos
+  • Arquitetura: casas de alvenaria, prédios residenciais, quitinetes, sobrados, construção típica brasileira
+
+- ESPANHOL:
+  • Lugares: praças espanholas, ruas de Madrid/Barcelona, costa mediterrânea, pueblos andaluzes, centros históricos
+  • Pessoas: pele mediterrânea, cabelos castanhos/pretos, características ibéricas, vestimentas elegantes casuais
+  • Carros: SEAT León/Ibiza, Renault Clio, Volkswagen Polo, Opel Corsa
+  • Arquitetura: casas andaluzas, prédios de apartamentos europeus, balcões de ferro, telhas de barro
+
+- ITALIANO:
+  • Lugares: piazzas italianas, ruas de Roma/Milão, costa italiana, centros históricos, vilarejos toscanos
+  • Pessoas: características mediterrâneas, gestos expressivos, estilo italiano elegante, cabelos escuros
+  • Carros: Fiat 500/Panda, Alfa Romeo Giulia, Lancia, Volkswagen Golf
+  • Arquitetura: prédios históricos italianos, varandas com plantas, janelas com persianas, pedra e mármore
+
+- INGLÊS (EUA):
+  • Lugares: subúrbios americanos, downtown, shopping malls, highways, bairros residenciais, parques urbanos
+  • Pessoas: diversidade étnica americana (brancos, negros, latinos, asiáticos), roupas casuais americanas (jeans, sneakers)
+  • Carros: Ford F-150, Chevrolet Camaro/Silverado, Toyota Camry, Honda Accord, táxis amarelos NYC
+  • Arquitetura: casas suburbanvas, prédios de vidro, arranha-céus, construção americana típica
+
+- FRANCÊS:
+  • Lugares: boulevards parisienses, cafés franceses, centros históricos, províncias francesas, vilarejos
+  • Pessoas: elegância francesa, estilo chic, características francesas, roupas refinadas mas casuais
+  • Carros: Peugeot 208/308, Citroën C3/C4, Renault Clio/Megane
+  • Arquitetura: prédios haussmannianos, apartamentos franceses, janelas francesas, varandas de ferro
+
+- POLONÊS:
+  • Lugares: centros históricos poloneses, bairros residenciais do leste europeu, praças medievais, cidades pós-socialistas
+  • Pessoas: características eslavas, cabelos loiros/castanhos, pele clara, roupas européias práticas
+  • Carros: Škoda Octavia, Volkswagen Passat, Opel Astra, Fiat 500
+  • Arquitetura: prédios socialistas, casas européias, blocos residenciais, centros históricos preservados
+
+- ROMENO:
+  • Lugares: centros históricos romenos, bairros de Bucareste, vilarejos rurais, paisagens balcânicas
+  • Pessoas: características do leste europeu/balcânicas, cabelos castanhos/pretos, mistura étnica balcânica
+  • Carros: Dacia Logan/Sandero, Renault, Volkswagen, Opel
+  • Arquitetura: construção balcânica, prédios comunistas, casas rurais romenas, influência otomana
+
 ${chunksText}
 
 Para cada chunk, retorne apenas o prompt de imagem, um por linha, numerado sequencialmente. 
 O prompt deve ser em português, descritivo, focado na cena visual principal, incluindo detalhes sobre personagens, ambiente, ações e atmosfera.
+Contextualize culturalmente: se um texto menciona "taxista", descreva um taxista brasileiro com carro popular brasileiro. Se menciona "casa", descreva arquitetura típica local.
 Mantenha cada prompt em uma única linha.
 
 Formato esperado:
-1. [prompt para chunk 1]
-2. [prompt para chunk 2]
-3. [prompt para chunk 3]
+1. [prompt culturalmente contextualizado para chunk 1]
+2. [prompt culturalmente contextualizado para chunk 2]  
+3. [prompt culturalmente contextualizado para chunk 3]
 ...`;
 
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
@@ -409,7 +458,7 @@ Formato esperado:
       messages: [
         {
           role: 'system',
-          content: 'Você é um especialista em criar prompts para geração de imagens foto realistas. Para cada texto fornecido, crie um prompt descritivo e visual em português que capture a cena principal.'
+          content: 'Você é um especialista em criar prompts para geração de imagens foto realistas com contextualização cultural precisa. Identifique o idioma do texto e adapte TODOS os elementos visuais para refletir a cultura específica: arquitetura típica do país, marcas de carros locais/populares, características físicas e étnicas regionais, paisagens urbanas/rurais características, roupas e objetos culturais. Seja específico com marcas e modelos de carros, estilos arquitetônicos e características visuais que tornem a imagem autenticamente representativa daquela cultura.'
         },
         {
           role: 'user',
