@@ -23,6 +23,154 @@ export class TTSService {
     this.whiskToken = newToken;
     console.log('✅ Token atualizado com sucesso!');
   }
+
+  cleanTitleFromFilename(filename: string): string {
+    // Remove extensão se houver
+    let cleanTitle = filename.replace(/\.(txt|md)$/i, '');
+    
+    // Remove padrão "número espaço hífen espaço" do início
+    cleanTitle = cleanTitle.replace(/^\d+\s*-\s*/, '');
+    
+    // Remove códigos YT se existirem
+    cleanTitle = cleanTitle.replace(/^YT\d{2}[-\s]*/, '');
+    
+    return cleanTitle.trim();
+  }
+
+  extractYTCodeFromPath(filePath: string): string | null {
+    // Extrair código YT do path ou filename como "YT01", "YT02", etc.
+    const match = filePath.match(/YT(\d{2})/i);
+    return match ? match[0].toUpperCase() : null;
+  }
+
+  getPromptTypeByYTCode(ytCode: string): number {
+    const mapping: { [key: string]: number } = {
+      'YT01': 4,             // Bridgerton Inglês (EN)
+      'YT06': 9,             // Bridgerton Brasileiro (PT-BR)
+      'YT03': 6,             // Histórias milionários (PL)
+      'YT04': 7,             // Histórias famílias (IT)
+      'YT05': 8,             // Histórias milionários (RO)
+      'YT11': 1,             // Wild West (EN-US)
+      'YT12': 2,             // Crônicas old man (EN-US)
+      'YT13': 3              // Pessoas desaparecidas (PT-BR)
+    };
+    return mapping[ytCode] || 4; // Default para prompt 4
+  }
+
+  getSpecializedPrompt(promptType: number): { systemPrompt: string, userPrompt: string } {
+    const prompts = {
+      1: { // Wild West (EN-US)
+        systemPrompt: 'You are a specialist in creating photorealistic image prompts for Wild West stories targeting American audiences. Focus on action, confrontation, heroic individualism, and iconic American frontier elements. Always include authentic American western details: Colt Peacemakers, Stetson hats, saloons, sheriff stars, Monument Valley landscapes.',
+        userPrompt: `Create detailed photorealistic image prompts for Wild West scenes. 
+
+FOCUS: Action and confrontation - Americans love westerns with gunfights and duels. Heroic individualism - lone cowboy against adversity. Monumental landscapes - Grand Canyon, Monument Valley, vast deserts. American nostalgia - iconic elements like saloons, sheriffs, bandits.
+
+THUMBNAIL STYLE: Photorealistic, cinematic Netflix-style thumbnail featuring rugged American cowboys in classic showdown. Focus on: weathered faces with stubble, authentic period Stetsons, leather holsters with Colt Peacemakers, sheriff stars, dusty boots with spurs. Setting: iconic American frontier town with wooden boardwalks, swinging saloon doors, tumbleweeds. Harsh desert sun lighting creating deep shadows, dust particles in air. American flag subtly visible.
+
+For each chunk, emphasize: iconic American weapons (Winchester rifles, Colt .45), Old West symbols (horseshoes, lassos, badges), typical bars with poker/whiskey/piano, frontier spirit and American freedom.`
+      },
+      2: { // Old Man Chronicles (EN-US)
+        systemPrompt: 'You are a specialist in creating photorealistic image prompts for first-person elderly American life stories. Focus on American nostalgia, wisdom, subtle patriotism, and traditional values. Include vintage objects from 40s-70s, family values, and American Dream elements.',
+        userPrompt: `Create detailed photorealistic image prompts for elderly American life stories.
+
+FOCUS: American nostalgia - vintage objects from 40s-70s. Wisdom and experience - wrinkles that tell stories. Subtle patriotism - flags, military medals, historic photos. Traditional values - family, hard work, American Dream.
+
+THUMBNAIL STYLE: Intimate photorealistic portrait of elderly American man (70-90s) with kind but knowing eyes, deep laugh lines, silver hair. Holding significant object (old photograph, military medal, vintage baseball, worn Bible). Background: cozy American home with family photos, American flag folded in triangle case, vintage radio. Warm window lighting suggesting sunset of life. Nostalgic color grading.
+
+For each chunk, include: American historical landmarks (JFK photos, moon landing, Vietnam), vintage objects (classic cars, old radios, typewriters), generational moments (50s dances, drive-ins, diners), golden nostalgic lighting.`
+      },
+      3: { // Pessoas Desaparecidas (PT-BR)
+        systemPrompt: 'Você é especialista em criar prompts fotorrealistas para histórias de pessoas desaparecidas no Brasil. Foque no regionalismo brasileiro, diversidade étnica, elementos culturais e realismo social. Inclua sempre elementos autênticos brasileiros.',
+        userPrompt: `Crie prompts fotorrealistas detalhados para histórias de pessoas desaparecidas no Brasil.
+
+FOCO: Regionalismo brasileiro - favelas, sertão, cidades do interior. Diversidade étnica - rostos brasileiros autênticos. Elementos culturais - santos, fitas do Senhor do Bonfim, terços. Realismo social - cartazes de "Procura-se", delegacias precárias.
+
+ESTILO THUMBNAIL: Composição fotorrealista impactante de mãe brasileira (30-50 anos) segurando foto desgastada de pessoa desaparecida, lágrimas nos olhos, expressão de desespero e esperança. Vestimenta simples típica brasileira. Fundo: mural de desaparecidos em delegacia ou poste de rua, cartazes de "PROCURA-SE" amarelados. Iluminação natural brasileira forte. Elementos: terço nas mãos, fitinha do Bonfim no pulso. Cores vibrantes mas melancólicas.
+
+Para cada chunk, mostre: cenários brasileiros reais (ruas de paralelepípedo, casas coloridas simples), detalhes culturais (imagens de santos, altares domésticos), diversidade regional (nordeste árido, favelas cariocas, interior paulista), rostos brasileiros autênticos com traços indígenas, africanos, europeus misturados.`
+      },
+      4: { // Romances Estilo Bridgerton (Regência Inglesa)
+        systemPrompt: 'You are a specialist in creating photorealistic image prompts for Bridgerton-style historical romances set in English Regency period (1811-1820). Focus on London high society, authentic Regency fashion, grand estates, lavish balls, and English aristocracy. Capture the exact Netflix Bridgerton aesthetic with opulent details and romantic atmosphere.',
+        userPrompt: `Create detailed photorealistic image prompts for Bridgerton-style Regency romances set in London.
+
+BRIDGERTON FOCUS: Regency London (1811-1820) - Mayfair society, ton gatherings, English aristocracy. Authentic Regency fashion - empire waist gowns, spencer jackets, pelisses, bonnets, gloves. Men in tailcoats, breeches, cravats, top hats. Settings: Grosvenor Square ballrooms, Hyde Park, country estates, drawing rooms.
+
+BRIDGERTON THUMBNAIL STYLE: Opulent Netflix-style scene with English Regency couple. Woman: empire waist silk gown with intricate beadwork, long gloves, elaborate hair with pearls and feathers, English rose complexion. Man: dark blue tailcoat with gold buttons, white cravat, fitted breeches, polished boots. Setting: grand Mayfair ballroom with crystal chandeliers, marble columns, English garden flowers. Candlelight illumination. Rich colors: deep blues, gold, ivory, burgundy.
+
+AUTHENTIC BRIDGERTON ELEMENTS:
+• LOCATIONS: Grosvenor Square ballrooms, Hyde Park promenades, English country estates, Almack's assembly rooms, Bond Street shops, Vauxhall Gardens
+• WOMEN'S FASHION: Empire waist gowns in silk/muslin, spencer jackets, pelisses, bonnets with ribbons, long gloves, reticules, fans, jewelry with pearls/diamonds
+• MEN'S FASHION: Dark tailcoats, white/colored waistcoats, cravats, fitted breeches, Hessian boots, top hats, walking sticks
+• DECOR: Crystal chandeliers, gilded mirrors, Chippendale furniture, Persian rugs, silk wallpaper, oil paintings, fresh flowers
+• ENGLISH FLOWERS: Roses, peonies, lavender, jasmine, lily of the valley, arrangements in Chinese porcelain vases
+• ATMOSPHERE: English propriety, forbidden romance, social intrigue, masked balls, secret garden meetings, carriage rides through London
+
+For each chunk, create scenes of: Mayfair ballroom dancing, Hyde Park promenades, tea in drawing rooms, opera at Covent Garden, country house parties, morning calls in London townhouses.`
+      },
+      5: { // Velho Oeste Espanhol (ES)
+        systemPrompt: 'Eres especialista en crear prompts fotorrealistas para historias del Viejo Oeste con estilo español. Enfócate en el estilo Spaghetti Western, drama y honor españoles, paisajes áridos ibéricos y toques flamencos.',
+        userPrompt: `Crea prompts fotorrealistas detallados para historias del Viejo Oeste español.
+
+ENFOQUE: Estilo Spaghetti Western - influencia de Sergio Leone. Drama y honor - conceptos españoles de venganza y honor. Paisajes áridos ibéricos - Almería, Bardenas Reales. Toque flamenco - guitarras, castañuelas, elementos moriscos.
+
+ESTILO THUMBNAIL: Composición cinematográfica estilo western europeo con pistolero solitario con sombrero cordobés y poncho español enfrentando antagonista. Rostros curtidos mediterráneos, ojos oscuros intensos. Escenario: pueblo español adaptado como western, arquitectura con arcos moriscos, plaza de toros al fondo. Iluminación dramática del mediodía español. Elementos: guitarra española, cruz católica, navaja. Colores tierra con rojos sangre.
+
+Para cada chunk, mezclar: arquitectura española con western (misiones, haciendas), elementos católicos (cruces, santos, procesiones), honor español en duelos y venganzas, paleta de colores ibérica (ocres, rojos, negros).`
+      },
+      6: { // Histórias Milionários Polonês (PL)
+        systemPrompt: 'Jesteś specjalistą tworzenia fotorealistycznych promptów dla emocjonalnych historii milionerów w Polsce. Skup się na głębokich emocjach, kontrastach społecznych, elementach polskich i melancholii słowiańskiej.',
+        userPrompt: `Twórz szczegółowe fotorealistyczne prompty dla emocjonalnych historii polskich milionerów.
+
+FOKUS: Głębokie emocje - Polacy cenią intensywne dramaty rodzinne. Kontrast społeczny - nowe bogactwo vs stare tradycje. Elementy polskie - architektura Warszawy, zamki, kościoły. Melancholia słowiańska - nostalgia, zaduma, refleksja.
+
+STYL THUMBNAIL: Dramatyczna scena emocjonalna z polskim milionerem (50-60 lat) w eleganckim garniturze, trzymającym stare zdjęcie rodzinne, łzy w oczach. Twarz słowiańska z głębokimi zmarszczkami. Tło: luksusowe wnętrze z widokiem na Pałac Kultury lub Stare Miasto. Kontrasty: drogie meble i proste polskie pamiątki (krzyż, stara ikona). Oświetlenie: zimne światło zimowe przez okno. Elementy: polski orzeł subtelnie widoczny.
+
+Dla każdego chunka pokazuj: kontrasty emocjonalne (bogactwo vs prostota dzieciństwa), symbole polskie (biały orzeł, bursztyn, premium vodka), intensywne słowiańskie wyrażenia (głęboka melancholia, wybuchowa radość), zimne oświetlenie typowe dla polskiej zimy.`
+      },
+      7: { // Histórias Famílias Italiano (IT)
+        systemPrompt: 'Sei uno specialista nella creazione di prompt fotorealistici per storie emozionanti di famiglie italiane. Concentrati sui legami familiari indistruttibili, gestualità italiana, scenari iconici e cibo come amore.',
+        userPrompt: `Crea prompt fotorealistici dettagliati per storie emozionanti di famiglie italiane.
+
+FOCUS: Famiglia è tutto - legami familiari indistruttibili. Gestualità italiana - mani espressive, abbracci calorosi. Scenari iconici - Toscana, villaggi costieri, piazze storiche. Cibo come amore - tavole imbandite, nonne che cucinano.
+
+STILE THUMBNAIL: Scena familiare carica di emozione con famiglia italiana multigenerazionale in momento drammatico. Nonna (80 anni) al centro con mani espressive, circondata da figli e nipoti. Volti mediterranei autentici, lacrime e sorrisi misti. Ambientazione: cucina rustica toscana o terrazza con vista mare. Tavola con pasta, vino, pane. Illuminazione calda dorata. Elementi: foto di famiglia, crocifisso, ramoscelli d'ulivo.
+
+Per ogni chunk, enfatizza: gesti italiani (mani che parlano, abbracci drammatici), tre generazioni sempre insieme, cibo come elemento emotivo (preparazione, condivisione), luce mediterranea dorata e calda.`
+      },
+      8: { // Histórias Milionários Romeno (RO)
+        systemPrompt: 'Ești specialist în crearea de prompt-uri fotorealiste pentru povești emoționante despre milionari români. Concentrează-te pe misterul Carpaților, atmosfera gotică română, drama balcanică și contrastele dintre modernitate și tradiții medievale.',
+        userPrompt: `Creează prompt-uri fotorealiste detaliate pentru povești emoționante despre milionari români.
+
+FOCUS: Misterul Carpaților - atmosferă gotică românească. Nou bogat vs aristocrație - castele, tradiții vechi. Dramă balcanică - pasiuni intense, răzbunări familiale. Contraste - modernitate vs tradiții medievale.
+
+STIL THUMBNAIL: Scenă dramatică foto-realistă cu milionar român (45-55 ani) în costum elegant, privind castelul strămoșesc din Carpați. Față est-europeană distinctivă, expresie complexă între triumf și melancolie. Fundal: castel gotic românesc în ceață, munți dramatici. Contrast: Rolls Royce modern lângă poartă medievală. Iluminare: amurg misterios, ceață în văi. Elemente: veche stemă familiei, crucifix ortodox. Culori: negru, burgundy, auriu.
+
+Pentru fiecare chunk, amestecă: elemente moderne și medievale (mașini de lux în castele), misticismul românesc (ceață, păduri întunecate, corbi), biserica ortodoxă (icoane aurite, lumânări), atmosfera gotică a Carpaților.`
+      },
+      9: { // Bridgerton Brasileiro (PT-BR)
+        systemPrompt: 'Você é especialista em criar prompts fotorrealistas para romances históricos estilo Bridgerton ambientados no Brasil Imperial (1822-1889). Foque na alta sociedade brasileira, moda da Regência adaptada ao clima tropical, palácios imperiais, fazendas de café e a corte de D. Pedro II. Misture elegância europeia com exuberância tropical brasileira.',
+        userPrompt: `Crie prompts fotorrealistas detalhados para romances históricos estilo Bridgerton no Brasil Imperial.
+
+FOCO BRIDGERTON BRASILEIRO: Período Imperial Brasileiro (1822-1889) - Corte de D. Pedro II, alta sociedade carioca e paulista. Moda Regência tropicalizada - vestidos império em tecidos leves, corpetes bordados com motivos tropicais, luvas de renda, leques de plumas de avestruz. Homens em casacas de linho, coletes bordados, cartolas. Cenários: Palácio de São Cristóvão, Quinta da Boa Vista, Teatro São Pedro, fazendas de café do Vale do Paraíba.
+
+ESTILO THUMBNAIL BRIDGERTON BRASILEIRO: Cena opulenta estilo Netflix com casal da aristocracia imperial brasileira. Mulher: vestido império em seda clara com bordados inspirados na flora tropical, corpete ajustado, luvas longas de renda, cabelos em penteado elaborado com flores de ipê, pele morena dourada aristocrática. Homem: casaca azul imperial com botões dourados, colete bordado com café e cana-de-açúcar, calças justas, cartola, bengala de jacarandá. Cenário: salão de baile do Paço Imperial com lustres de cristal de Baccarat, cortinas de seda francesa, arranjos tropicais luxuosos. Iluminação dourada de velas e lustres. Cores imperiais: azul, dourado, verde e amarelo sutis.
+
+ELEMENTOS BRIDGERTON BRASILEIROS:
+• LOCAIS: Paço Imperial Rio de Janeiro, Palácio de Petrópolis, Teatro São João, Jardim Botânico Imperial, fazendas baronesas do café, casarões de Botafogo
+• MODA FEMININA: Vestidos império em musselina e seda, corpetes com bordados de orquídeas e beija-flores, xales de cashmere, joias com pedras preciosas brasileiras (esmeraldas, águas-marinhas), leques de plumas exóticas
+• MODA MASCULINA: Casacas de linho fino, coletes com bordados tropicais, gravatas de seda, cartolas de feltro, bengalas de madeiras nobres brasileiras (jacarandá, pau-brasil)
+• DECORAÇÃO: Lustres franceses, móveis Império tropicalizados, tapetes persas, cortinas de damasco, porcelanas da Companhia das Índias, vasos com orquídeas e bromélias
+• FLORES TROPICAIS NOBRES: Orquídeas imperiais, helicônias douradas, antúrios vermelhos, flores de ipê amarelo, arranjos com frutas tropicais cristalizadas
+• ATMOSFERA: Opulência tropical imperial, romance na corte brasileira, intrigas palaciais, bailes mascarados, encontros secretos em jardins imperiais
+
+IMPORTANTE: A thumbnail NÃO deve ser renderizada, apenas salva. O vídeo final deve receber o nome do título.
+
+Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos no Jardim Botânico, passeios de carruagem pela Tijuca, saraus na corte, corridas no Jockey Club, cerimônias na Capela Imperial.`
+      }
+    };
+
+    return prompts[promptType] || prompts[4]; // Default to type 4
+  }
   
   // private readonly apiKeys = [
   //   "AIzaSyArTATX_unM1LvawzEQ5uU0LDqj0nyewo4",
@@ -273,7 +421,7 @@ export class TTSService {
     return filePath;
   }
 
-  async processTextToSpeech(text: string, outputDir: string = 'D:\\Canais Dark'): Promise<string[]> {
+  async processTextToSpeech(text: string, outputDir: string = 'D:\\Canais Dark', filePath?: string): Promise<string[]> {
     if (!text) {
       throw new Error('Nenhum texto foi fornecido.');
     }
@@ -335,7 +483,7 @@ export class TTSService {
     // Gerar prompts de imagem após conversão de áudio
     try {
       console.log('\n🎨 Gerando prompts de imagem...');
-      const prompts = await this.generateImagePrompts(chunks, outputDir);
+      const prompts = await this.generateImagePrompts(chunks, outputDir, filePath);
       
       // Gerar imagens com Whisk após prompts
       console.log('\n🖼️ Gerando imagens com Whisk...');
@@ -343,7 +491,7 @@ export class TTSService {
 
       // Renderizar vídeo final com FFmpeg
       console.log('\n🎬 Renderizando vídeo final...');
-      await this.renderVideoWithFFmpeg(outputDir);
+      await this.renderVideoWithFFmpeg(outputDir, filePath);
       
     } catch (error) {
       console.error('❌ Erro ao gerar prompts/imagens/vídeo:', error.message);
@@ -353,16 +501,35 @@ export class TTSService {
     return savedFiles;
   }
 
-  async generateImagePrompts(chunks: TextChunk[], outputDir: string): Promise<string[]> {
+  async generateImagePrompts(chunks: TextChunk[], outputDir: string, filePath?: string): Promise<string[]> {
     const batchSize = 5;
     const allPrompts: string[] = [];
+
+    // Detectar código YT do path do arquivo e determinar tipo de prompt
+    let promptType = 4; // Default
+    let ytCode = null;
+    let fileName = '';
+    
+    if (filePath) {
+      ytCode = this.extractYTCodeFromPath(filePath);
+      fileName = path.basename(filePath, path.extname(filePath)); // Nome sem extensão
+      
+      if (ytCode) {
+        promptType = this.getPromptTypeByYTCode(ytCode);
+        console.log(`📁 Código detectado: ${ytCode} → Usando prompt tipo ${promptType}`);
+        console.log(`📋 Título para thumbnail: "${fileName}"`);
+      } else {
+        console.log(`📁 Nenhum código YT detectado no path, usando prompt padrão (tipo 4)`);
+        console.log(`📋 Título para thumbnail: "${fileName}"`);
+      }
+    }
 
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
       console.log(`Processando lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} para prompts de imagem...`);
 
       try {
-        const prompts = await this.callChatGPT(batch);
+        const prompts = await this.callChatGPT(batch, promptType, fileName);
         allPrompts.push(...prompts);
         console.log(`✅ Gerados ${prompts.length} prompts para o lote`);
       } catch (error) {
@@ -385,72 +552,28 @@ export class TTSService {
     return allPrompts;
   }
 
-  async callChatGPT(chunks: TextChunk[]): Promise<string[]> {
+  async callChatGPT(chunks: TextChunk[], promptType: number = 4, titleForThumbnail: string = ''): Promise<string[]> {
     const chunksText = chunks.map((chunk, index) => 
       `=== CHUNK ${chunk.chunkIndex + 1} ===\n${chunk.text}\n`
     ).join('\n');
 
-    const prompt = `Analise os seguintes trechos de texto e para cada um gere um prompt detalhado para geração de imagem foto realista que represente visualmente a cena principal descrita no trecho.
+    const specializedPrompt = this.getSpecializedPrompt(promptType);
+    
+    const titleInstruction = titleForThumbnail ? 
+      `\n\nIMPORTANTE THUMBNAIL: Para o primeiro prompt (thumbnail), SEMPRE mencione "with clear space for the title '${titleForThumbnail}' to be overlaid" na descrição. Posicione os elementos para deixar área limpa onde o título será adicionado posteriormente.` : '';
 
-IMPORTANTE: 
-1. Primeiro identifique o idioma predominante dos textos
-2. Adapte os prompts para refletir a cultura e características visuais típicas desse país/região
-
-EXEMPLOS DE CONTEXTUALIZAÇÃO POR PAÍS/IDIOMA:
-
-- PORTUGUÊS BRASILEIRO: 
-  • Lugares: favelas cariocas, bairros paulistanos, praias de Copacabana, centro histórico de Salvador, subúrbios de BH, interior de MG
-  • Pessoas: diversidade étnica (pardos, negros, brancos, asiáticos), cabelos cacheados/crespos, pele morena, roupas casuais (bermuda, chinelo, camiseta)
-  • Carros: Gol, Palio, Onix, HB20, Civic, táxis amarelos
-  • Arquitetura: casas de alvenaria, prédios residenciais, quitinetes, sobrados, construção típica brasileira
-
-- ESPANHOL:
-  • Lugares: praças espanholas, ruas de Madrid/Barcelona, costa mediterrânea, pueblos andaluzes, centros históricos
-  • Pessoas: pele mediterrânea, cabelos castanhos/pretos, características ibéricas, vestimentas elegantes casuais
-  • Carros: SEAT León/Ibiza, Renault Clio, Volkswagen Polo, Opel Corsa
-  • Arquitetura: casas andaluzas, prédios de apartamentos europeus, balcões de ferro, telhas de barro
-
-- ITALIANO:
-  • Lugares: piazzas italianas, ruas de Roma/Milão, costa italiana, centros históricos, vilarejos toscanos
-  • Pessoas: características mediterrâneas, gestos expressivos, estilo italiano elegante, cabelos escuros
-  • Carros: Fiat 500/Panda, Alfa Romeo Giulia, Lancia, Volkswagen Golf
-  • Arquitetura: prédios históricos italianos, varandas com plantas, janelas com persianas, pedra e mármore
-
-- INGLÊS (EUA):
-  • Lugares: subúrbios americanos, downtown, shopping malls, highways, bairros residenciais, parques urbanos
-  • Pessoas: diversidade étnica americana (brancos, negros, latinos, asiáticos), roupas casuais americanas (jeans, sneakers)
-  • Carros: Ford F-150, Chevrolet Camaro/Silverado, Toyota Camry, Honda Accord, táxis amarelos NYC
-  • Arquitetura: casas suburbanvas, prédios de vidro, arranha-céus, construção americana típica
-
-- FRANCÊS:
-  • Lugares: boulevards parisienses, cafés franceses, centros históricos, províncias francesas, vilarejos
-  • Pessoas: elegância francesa, estilo chic, características francesas, roupas refinadas mas casuais
-  • Carros: Peugeot 208/308, Citroën C3/C4, Renault Clio/Megane
-  • Arquitetura: prédios haussmannianos, apartamentos franceses, janelas francesas, varandas de ferro
-
-- POLONÊS:
-  • Lugares: centros históricos poloneses, bairros residenciais do leste europeu, praças medievais, cidades pós-socialistas
-  • Pessoas: características eslavas, cabelos loiros/castanhos, pele clara, roupas européias práticas
-  • Carros: Škoda Octavia, Volkswagen Passat, Opel Astra, Fiat 500
-  • Arquitetura: prédios socialistas, casas européias, blocos residenciais, centros históricos preservados
-
-- ROMENO:
-  • Lugares: centros históricos romenos, bairros de Bucareste, vilarejos rurais, paisagens balcânicas
-  • Pessoas: características do leste europeu/balcânicas, cabelos castanhos/pretos, mistura étnica balcânica
-  • Carros: Dacia Logan/Sandero, Renault, Volkswagen, Opel
-  • Arquitetura: construção balcânica, prédios comunistas, casas rurais romenas, influência otomana
+    const prompt = `${specializedPrompt.userPrompt}
 
 ${chunksText}
 
 Para cada chunk, retorne apenas o prompt de imagem, um por linha, numerado sequencialmente. 
-O prompt deve ser em português, descritivo, focado na cena visual principal, incluindo detalhes sobre personagens, ambiente, ações e atmosfera.
-Contextualize culturalmente: se um texto menciona "taxista", descreva um taxista brasileiro com carro popular brasileiro. Se menciona "casa", descreva arquitetura típica local.
-Mantenha cada prompt em uma única linha.
+O PRIMEIRO prompt deve ser uma THUMBNAIL de alto CTR conforme especificado no estilo.
+Mantenha cada prompt em uma única linha.${titleInstruction}
 
 Formato esperado:
-1. [prompt culturalmente contextualizado para chunk 1]
-2. [prompt culturalmente contextualizado para chunk 2]  
-3. [prompt culturalmente contextualizado para chunk 3]
+1. [THUMBNAIL - prompt especializado para chunk 1]
+2. [prompt especializado para chunk 2]  
+3. [prompt especializado para chunk 3]
 ...`;
 
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
@@ -458,7 +581,7 @@ Formato esperado:
       messages: [
         {
           role: 'system',
-          content: 'Você é um especialista em criar prompts para geração de imagens foto realistas com contextualização cultural precisa. Identifique o idioma do texto e adapte TODOS os elementos visuais para refletir a cultura específica: arquitetura típica do país, marcas de carros locais/populares, características físicas e étnicas regionais, paisagens urbanas/rurais características, roupas e objetos culturais. Seja específico com marcas e modelos de carros, estilos arquitetônicos e características visuais que tornem a imagem autenticamente representativa daquela cultura.'
+          content: specializedPrompt.systemPrompt
         },
         {
           role: 'user',
@@ -667,7 +790,7 @@ Formato esperado:
     });
   }
 
-  async renderVideoWithFFmpeg(outputDir: string): Promise<string> {
+  async renderVideoWithFFmpeg(outputDir: string, filePath?: string): Promise<string> {
     const { exec } = require('child_process');
     const util = require('util');
     const execAsync = util.promisify(exec);
@@ -734,7 +857,16 @@ Linux/Mac:
       await fs.writeFile(listFile, listContent, 'utf-8');
 
       // Concatenar todos os segmentos
-      const finalOutput = path.join(outputDir, 'video_final.mp4');
+      let videoFileName = 'video_final.mp4';
+      if (filePath) {
+        const fileName = path.basename(filePath, path.extname(filePath));
+        const cleanTitle = this.cleanTitleFromFilename(fileName);
+        if (cleanTitle) {
+          videoFileName = `${cleanTitle}.mp4`;
+        }
+      }
+      
+      const finalOutput = path.join(outputDir, videoFileName);
       const concatCommand = `ffmpeg -y -f concat -safe 0 -i "${listFile}" -c copy "${finalOutput}"`;
       
       console.log('🔗 Concatenando segmentos...');

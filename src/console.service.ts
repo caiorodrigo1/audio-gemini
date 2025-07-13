@@ -59,9 +59,14 @@ export class ConsoleService {
           return;
         }
 
-        // Verificar se são arquivos (caminhos entre aspas)
-        if (input.includes('"')) {
-          await processFiles(input);
+        // Verificar se são arquivos (caminhos entre aspas OU extensão de arquivo)
+        if (input.includes('"') || input.trim().endsWith('.txt')) {
+          if (!input.includes('"')) {
+            // Se é um arquivo sem aspas, processar diretamente
+            await processFile(input.trim());
+          } else {
+            await processFiles(input);
+          }
           promptUser();
           return;
         }
@@ -154,7 +159,7 @@ export class ConsoleService {
         
         // Usar o diretório do arquivo como base
         const baseDir = path.dirname(filePath);
-        await processText(fileContent, baseDir);
+        await processText(fileContent, baseDir, filePath);
         
       } catch (error) {
         console.error('\n❌ Erro ao ler arquivo:', error.message);
@@ -198,11 +203,11 @@ export class ConsoleService {
       return path.join(baseDir, folderName);
     };
 
-    const processText = async (text: string, baseDir?: string) => {
+    const processText = async (text: string, baseDir?: string, filePath?: string) => {
       try {
         console.log('\nProcessando texto...');
         const outputDir = await createDateTimeFolder(baseDir);
-        const savedFiles = await this.ttsService.processTextToSpeech(text, outputDir);
+        const savedFiles = await this.ttsService.processTextToSpeech(text, outputDir, filePath);
         
         console.log('\n✅ Conversão concluída com sucesso!');
         console.log(`📁 Arquivos salvos em: ${outputDir}`);
