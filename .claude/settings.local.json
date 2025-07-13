@@ -11,7 +11,8 @@
       "Bash(copy:*)",
       "Bash(cp:*)",
       "Bash(npm run:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(ffmpeg:*)"
     ],
     "deny": []
   }

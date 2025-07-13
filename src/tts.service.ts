@@ -330,9 +330,14 @@ export class TTSService {
       // Gerar imagens com Whisk após prompts
       console.log('\n🖼️ Gerando imagens com Whisk...');
       await this.generateImagesWithWhisk(prompts, outputDir);
+
+      // Renderizar vídeo final com FFmpeg
+      console.log('\n🎬 Renderizando vídeo final...');
+      await this.renderVideoWithFFmpeg(outputDir);
+      
     } catch (error) {
-      console.error('❌ Erro ao gerar prompts/imagens:', error.message);
-      console.log('Áudios foram gerados com sucesso, mas prompts/imagens falharam.');
+      console.error('❌ Erro ao gerar prompts/imagens/vídeo:', error.message);
+      console.log('Áudios foram gerados com sucesso, mas prompts/imagens/vídeo falharam.');
     }
 
     return savedFiles;
@@ -456,70 +461,112 @@ Formato esperado:
 
         // Delay entre imagens para evitar rate limiting
         if (i < prompts.length - 1) {
+          console.log(`⏳ Aguardando 3s antes da próxima imagem...`);
           await new Promise(resolve => setTimeout(resolve, 3000));
         }
 
       } catch (error) {
-        console.error(`❌ Erro ao gerar imagem ${i + 1}:`, error.message);
+        console.error(`❌ Erro ao gerar imagem ${i + 1} após todas as tentativas:`, error.message);
         console.log('Continuando com próxima imagem...');
       }
     }
   }
 
   async callWhiskAPI(prompt: string): Promise<Buffer> {
-    const payload = {
-      clientContext: {
-        workflowId: this.generateUUID(),
-        tool: "BACKBONE",
-        sessionId: `;${Date.now()}`
-      },
-      imageModelSettings: {
-        imageModel: "IMAGEN_3_5",
-        aspectRatio: "IMAGE_ASPECT_RATIO_LANDSCAPE"
-      },
-      seed: Math.floor(Math.random() * 1000000),
-      prompt: prompt,
-      mediaCategory: "MEDIA_CATEGORY_BOARD"
-    };
+    const maxRetries = 3;
+    let lastError: any;
 
-    const response = await axios.post('https://aisandbox-pa.googleapis.com/v1/whisk:generateImage', payload, {
-      headers: {
-        'accept': '*/*',
-        'accept-language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,it;q=0.6',
-        'authorization': `Bearer ${this.whiskToken}`,
-        'cache-control': 'no-cache',
-        'content-type': 'application/json',
-        'origin': 'https://labs.google',
-        'pragma': 'no-cache',
-        'priority': 'u=1, i',
-        'referer': 'https://labs.google/',
-        'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'cross-site',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-        'x-browser-channel': 'stable',
-        'x-browser-copyright': 'Copyright 2025 Google LLC. All rights reserved.',
-        'x-browser-validation': '6h3XF8YcD8syi2FF2BbuE2KllQo=',
-        'x-browser-year': '2025',
-        'x-client-data': 'CKW1yQEIjbbJAQiktskBCKmdygEI34DLAQiTocsBCKSjywEIhaDNAQjh8M4BCKXyzgE='
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`🔄 Tentativa ${attempt + 1}/${maxRetries} para gerar imagem...`);
+          // Delay progressivo entre tentativas
+          await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+        }
+
+        const payload = {
+          clientContext: {
+            workflowId: this.generateUUID(),
+            tool: "BACKBONE",
+            sessionId: `;${Date.now()}`
+          },
+          imageModelSettings: {
+            imageModel: "IMAGEN_3_5",
+            aspectRatio: "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          seed: Math.floor(Math.random() * 1000000),
+          prompt: prompt,
+          mediaCategory: "MEDIA_CATEGORY_BOARD"
+        };
+
+        const response = await axios.post('https://aisandbox-pa.googleapis.com/v1/whisk:generateImage', payload, {
+          headers: {
+            'accept': '*/*',
+            'accept-language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,it;q=0.6',
+            'authorization': `Bearer ${this.whiskToken}`,
+            'cache-control': 'no-cache',
+            'content-type': 'application/json',
+            'origin': 'https://labs.google',
+            'pragma': 'no-cache',
+            'priority': 'u=1, i',
+            'referer': 'https://labs.google/',
+            'sec-ch-ua': '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'cross-site',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'x-browser-channel': 'stable',
+            'x-browser-copyright': 'Copyright 2025 Google LLC. All rights reserved.',
+            'x-browser-validation': '6h3XF8YcD8syi2FF2BbuE2KllQo=',
+            'x-browser-year': '2025',
+            'x-client-data': 'CKW1yQEIjbbJAQiktskBCKmdygEI34DLAQiTocsBCKSjywEIhaDNAQjh8M4BCKXyzgE='
+          }
+        });
+
+        // Extrair a imagem base64 da resposta
+        const responseData = response.data;
+        
+        if (!responseData || !responseData.imagePanels || !responseData.imagePanels[0] || 
+            !responseData.imagePanels[0].generatedImages || !responseData.imagePanels[0].generatedImages[0] ||
+            !responseData.imagePanels[0].generatedImages[0].encodedImage) {
+          throw new Error(`Resposta inválida do Whisk: ${JSON.stringify(responseData)}`);
+        }
+
+        // Decodificar base64 para buffer
+        const base64Image = responseData.imagePanels[0].generatedImages[0].encodedImage;
+        
+        if (attempt > 0) {
+          console.log(`✅ Imagem gerada com sucesso na tentativa ${attempt + 1}!`);
+        }
+        
+        return Buffer.from(base64Image, 'base64');
+
+      } catch (error) {
+        lastError = error;
+        const isRateLimit = error.response?.status === 429;
+        const isServerError = error.response?.status >= 500;
+        
+        console.error(`❌ Tentativa ${attempt + 1}/${maxRetries} falhou:`, error.message);
+        
+        if (isRateLimit || isServerError) {
+          console.log(`🔄 Erro de rate limit/servidor, tentando novamente...`);
+          if (attempt < maxRetries - 1) {
+            continue; // Tentar novamente
+          }
+        } else {
+          // Erro que não é recuperável - não tentar novamente
+          break;
+        }
       }
-    });
-
-    // Extrair a imagem base64 da resposta
-    const responseData = response.data;
-    
-    if (!responseData || !responseData.imagePanels || !responseData.imagePanels[0] || 
-        !responseData.imagePanels[0].generatedImages || !responseData.imagePanels[0].generatedImages[0] ||
-        !responseData.imagePanels[0].generatedImages[0].encodedImage) {
-      throw new Error(`Resposta inválida do Whisk: ${JSON.stringify(responseData)}`);
     }
-
-    // Decodificar base64 para buffer
-    const base64Image = responseData.imagePanels[0].generatedImages[0].encodedImage;
-    return Buffer.from(base64Image, 'base64');
+    
+    console.error(`❌ Todas as ${maxRetries} tentativas falharam para gerar imagem`);
+    if (lastError.response) {
+      console.error('Última resposta da API:', lastError.response.data);
+    }
+    throw lastError;
   }
 
   async saveImage(imageBuffer: Buffer, imageIndex: number, outputDir: string): Promise<void> {
@@ -536,5 +583,146 @@ Formato esperado:
       const v = c == 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
     });
+  }
+
+  async renderVideoWithFFmpeg(outputDir: string): Promise<string> {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+
+    try {
+      // Verificar se FFmpeg está instalado
+      try {
+        await execAsync('ffmpeg -version');
+      } catch (error) {
+        throw new Error(`FFmpeg não encontrado. Por favor, instale o FFmpeg:
+        
+📥 INSTALAÇÃO DO FFMPEG:
+Windows: 
+1. Baixe de: https://ffmpeg.org/download.html#build-windows
+2. Extraia e adicione ao PATH do sistema
+3. Ou use: winget install FFmpeg
+
+Linux/Mac:
+- Ubuntu/Debian: sudo apt install ffmpeg
+- CentOS/RHEL: sudo yum install ffmpeg
+- macOS: brew install ffmpeg
+
+❗ Após a instalação, reinicie o terminal e tente novamente.`);
+      }
+
+      console.log('🎬 Iniciando renderização do vídeo com FFmpeg...');
+
+      // Verificar se os arquivos de áudio e imagem existem
+      const audioFiles = await this.getAudioFiles(outputDir);
+      const imageFiles = await this.getImageFiles(outputDir);
+
+      if (audioFiles.length === 0) {
+        throw new Error('Nenhum arquivo de áudio encontrado para renderização');
+      }
+
+      if (imageFiles.length === 0) {
+        throw new Error('Nenhuma imagem encontrada para renderização');
+      }
+
+      console.log(`📊 Encontrados ${audioFiles.length} áudios e ${imageFiles.length} imagens`);
+
+      // Criar lista de inputs para FFmpeg
+      const videoSegments: string[] = [];
+      const minLength = Math.min(audioFiles.length, imageFiles.length);
+
+      for (let i = 0; i < minLength; i++) {
+        const audioFile = audioFiles[i];
+        const imageFile = imageFiles[i];
+        const segmentOutput = path.join(outputDir, `segment_${i + 1}.mp4`);
+
+        console.log(`🎥 Criando segmento ${i + 1}/${minLength}...`);
+
+        // Comando FFmpeg para cada segmento
+        const ffmpegCommand = `ffmpeg -y -loop 1 -i "${imageFile}" -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black" -shortest "${segmentOutput}"`;
+        
+        await execAsync(ffmpegCommand);
+        videoSegments.push(segmentOutput);
+        console.log(`✅ Segmento ${i + 1} criado: ${path.basename(segmentOutput)}`);
+      }
+
+      // Criar arquivo de lista para concatenação
+      const listFile = path.join(outputDir, 'segments_list.txt');
+      const listContent = videoSegments.map(segment => `file '${segment}'`).join('\n');
+      await fs.writeFile(listFile, listContent, 'utf-8');
+
+      // Concatenar todos os segmentos
+      const finalOutput = path.join(outputDir, 'video_final.mp4');
+      const concatCommand = `ffmpeg -y -f concat -safe 0 -i "${listFile}" -c copy "${finalOutput}"`;
+      
+      console.log('🔗 Concatenando segmentos...');
+      await execAsync(concatCommand);
+
+      // Limpar arquivos temporários
+      console.log('🧹 Limpando arquivos temporários...');
+      for (const segment of videoSegments) {
+        try {
+          await fs.unlink(segment);
+        } catch (error) {
+          console.warn(`Aviso: Não foi possível deletar ${segment}`);
+        }
+      }
+      
+      try {
+        await fs.unlink(listFile);
+      } catch (error) {
+        console.warn('Aviso: Não foi possível deletar o arquivo de lista');
+      }
+
+      console.log(`🎉 Vídeo renderizado com sucesso: ${finalOutput}`);
+      return finalOutput;
+
+    } catch (error) {
+      console.error('❌ Erro durante a renderização:', error.message);
+      throw error;
+    }
+  }
+
+  private async getAudioFiles(outputDir: string): Promise<string[]> {
+    try {
+      const files = await fs.readdir(outputDir);
+      const audioFiles = files
+        .filter(file => file.startsWith('output_audio_') && file.endsWith('.wav'))
+        .sort((a, b) => {
+          const aNum = parseInt(a.match(/output_audio_(\d+)\.wav/)?.[1] || '0');
+          const bNum = parseInt(b.match(/output_audio_(\d+)\.wav/)?.[1] || '0');
+          return aNum - bNum;
+        })
+        .map(file => path.join(outputDir, file));
+      
+      return audioFiles;
+    } catch (error) {
+      console.error('Erro ao buscar arquivos de áudio:', error);
+      return [];
+    }
+  }
+
+  private async getImageFiles(outputDir: string): Promise<string[]> {
+    try {
+      const files = await fs.readdir(outputDir);
+      const imageFiles = files
+        .filter(file => file.startsWith('imagem_') && file.endsWith('.jpg'))
+        .sort((a, b) => {
+          const aNum = parseInt(a.match(/imagem_(\d+)\.jpg/)?.[1] || '0');
+          const bNum = parseInt(b.match(/imagem_(\d+)\.jpg/)?.[1] || '0');
+          return aNum - bNum;
+        })
+        .map(file => path.join(outputDir, file));
+      
+      return imageFiles;
+    } catch (error) {
+      console.error('Erro ao buscar arquivos de imagem:', error);
+      return [];
+    }
+  }
+
+  async renderExistingFiles(outputDir: string): Promise<string> {
+    console.log(`\n🎬 Renderizando vídeo a partir dos arquivos existentes em: ${outputDir}`);
+    return await this.renderVideoWithFFmpeg(outputDir);
   }
 }
