@@ -12,16 +12,34 @@ interface TextChunk {
 @Injectable()
 export class TTSService {
   private readonly openaiApiKey = "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";
-  private whiskToken = "ya29.a0AS3H6NwqSsOtjUwrEJL44ydVim9dbHbGGW_JfKZlxS-vfgRVvi5c4fSu8G4XakRS71SLZQxorh4qWSHeEp0Pjcz19aAfvs7V2lG6YiTY60mpzMxj10fEHLnGkdY64CwzpGGm1Tupd8SR0LuUnN9bfLIrbsEr40p1XMye7deaCo9Vnzctquf-1sxoxYbVNmj6puTR-i5K-7x5yjaPgkIplZ8MWTw4WzIz-GRzQsKgb39mzU6F6GSbGjWEdxgphZjcQ95Er1hw9ZGIWfW6Q6DbUD30qxEA-RtkFj4q13kLTEUqSy2nff0WPnZSp_5PtKGRIble9V8464vYvwaCgYKAVgSARISFQHGX2MicgIRxgKa2nv5CY5DKEbLZA0341";
+  private whiskToken = "ya29.a0AS3H6Nwtgh14RrgkFI553fjcT3hAb7Z6nf6hsfdkgi_AWDMX9YVdnuhKVYQAtCExJm5EQRj9Jnx-WoFW6icgRf8jFj9AGDAgDZtEqvHaqx0sefGcXipbW0lCY7iCg1YyjoRsk_P5v23enHQq7dIty9JDngLQ2HJ2kZQc7SbGQluXXyVkBUJjtbLEbvyYJ7s9PUNIKiUiXfnURgBg1QCSQUjmxRnkAZSXfxHllKxdXz2ScpoosLSx0mS7WgldvdTvl_eB8cMLPDO2j8qQOLgKUj71n8--sJgIf9Csbnb0uLoeSGL1nOllQLo10THbGu9eE7czjRalV5LcS78aCgYKARMSARISFQHGX2MifEuuPUcCJ53DGsQlY2nLOw0342";
   private consoleService: any; // Referência para o console service
 
   setConsoleService(consoleService: any) {
     this.consoleService = consoleService;
   }
 
-  updateWhiskToken(newToken: string) {
+  async updateWhiskToken(newToken: string) {
     this.whiskToken = newToken;
-    console.log('✅ Token atualizado com sucesso!');
+    
+    // Salvar o novo token no arquivo permanentemente
+    try {
+      const filePath = __filename; // Caminho deste arquivo
+      const fileContent = await fs.readFile(filePath, 'utf-8');
+      
+      // Substituir o token antigo pelo novo
+      const updatedContent = fileContent.replace(
+        /private whiskToken = "[^"]*";/,
+        `private whiskToken = "${newToken}";`
+      );
+      
+      await fs.writeFile(filePath, updatedContent, 'utf-8');
+      console.log('✅ Token atualizado e salvo permanentemente no código!');
+      
+    } catch (error) {
+      console.warn('⚠️ Token atualizado na memória, mas não foi possível salvar no arquivo:', error.message);
+      console.log('✅ Token funcionando na sessão atual!');
+    }
   }
 
   cleanTitleFromFilename(filename: string): string {
@@ -46,10 +64,11 @@ export class TTSService {
   getPromptTypeByYTCode(ytCode: string): number {
     const mapping: { [key: string]: number } = {
       'YT01': 4,             // Bridgerton Inglês (EN)
-      'YT06': 9,             // Bridgerton Brasileiro (PT-BR)
+      'YT02': 1,             // Wild West Romance (EN-US)
       'YT03': 6,             // Histórias milionários (PL)
       'YT04': 7,             // Histórias famílias (IT)
       'YT05': 8,             // Histórias milionários (RO)
+      'YT06': 9,             // Bridgerton Brasileiro (PT-BR)
       'YT11': 1,             // Wild West (EN-US)
       'YT12': 2,             // Crônicas old man (EN-US)
       'YT13': 3              // Pessoas desaparecidas (PT-BR)
@@ -482,8 +501,29 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
 
     // Gerar prompts de imagem após conversão de áudio
     try {
+      // Detectar código YT e determinar tipo de prompt primeiro
+      let promptType = 4; // Default
+      let cleanTitle = '';
+      
+      if (filePath) {
+        const ytCode = this.extractYTCodeFromPath(filePath);
+        const fileName = path.basename(filePath, path.extname(filePath));
+        cleanTitle = this.cleanTitleFromFilename(fileName);
+        
+        if (ytCode) {
+          promptType = this.getPromptTypeByYTCode(ytCode);
+          console.log(`📁 Código detectado: ${ytCode} → Usando prompt tipo ${promptType}`);
+        }
+      }
+      
       console.log('\n🎨 Gerando prompts de imagem...');
-      const prompts = await this.generateImagePrompts(chunks, outputDir, filePath);
+      const prompts = await this.generateImagePrompts(chunks, outputDir, promptType);
+      
+      // Gerar thumbnail separada baseada no título limpo
+      if (cleanTitle) {
+        console.log('\n🎯 Gerando thumbnail baseada no título...');
+        await this.generateThumbnail(cleanTitle, outputDir, promptType);
+      }
       
       // Gerar imagens com Whisk após prompts
       console.log('\n🖼️ Gerando imagens com Whisk...');
@@ -501,35 +541,16 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
     return savedFiles;
   }
 
-  async generateImagePrompts(chunks: TextChunk[], outputDir: string, filePath?: string): Promise<string[]> {
+  async generateImagePrompts(chunks: TextChunk[], outputDir: string, promptType: number): Promise<string[]> {
     const batchSize = 5;
     const allPrompts: string[] = [];
-
-    // Detectar código YT do path do arquivo e determinar tipo de prompt
-    let promptType = 4; // Default
-    let ytCode = null;
-    let fileName = '';
-    
-    if (filePath) {
-      ytCode = this.extractYTCodeFromPath(filePath);
-      fileName = path.basename(filePath, path.extname(filePath)); // Nome sem extensão
-      
-      if (ytCode) {
-        promptType = this.getPromptTypeByYTCode(ytCode);
-        console.log(`📁 Código detectado: ${ytCode} → Usando prompt tipo ${promptType}`);
-        console.log(`📋 Título para thumbnail: "${fileName}"`);
-      } else {
-        console.log(`📁 Nenhum código YT detectado no path, usando prompt padrão (tipo 4)`);
-        console.log(`📋 Título para thumbnail: "${fileName}"`);
-      }
-    }
 
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
       console.log(`Processando lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} para prompts de imagem...`);
 
       try {
-        const prompts = await this.callChatGPT(batch, promptType, fileName);
+        const prompts = await this.callChatGPT(batch, promptType);
         allPrompts.push(...prompts);
         console.log(`✅ Gerados ${prompts.length} prompts para o lote`);
       } catch (error) {
@@ -552,23 +573,20 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
     return allPrompts;
   }
 
-  async callChatGPT(chunks: TextChunk[], promptType: number = 4, titleForThumbnail: string = ''): Promise<string[]> {
+  async callChatGPT(chunks: TextChunk[], promptType: number = 4): Promise<string[]> {
     const chunksText = chunks.map((chunk, index) => 
       `=== CHUNK ${chunk.chunkIndex + 1} ===\n${chunk.text}\n`
     ).join('\n');
 
     const specializedPrompt = this.getSpecializedPrompt(promptType);
     
-    const titleInstruction = titleForThumbnail ? 
-      `\n\nIMPORTANTE THUMBNAIL: Para o primeiro prompt (thumbnail), SEMPRE mencione "with clear space for the title '${titleForThumbnail}' to be overlaid" na descrição. Posicione os elementos para deixar área limpa onde o título será adicionado posteriormente.` : '';
-
     const prompt = `${specializedPrompt.userPrompt}
 
 ${chunksText}
 
 Para cada chunk, retorne apenas o prompt de imagem, um por linha, numerado sequencialmente. 
 O PRIMEIRO prompt deve ser uma THUMBNAIL de alto CTR conforme especificado no estilo.
-Mantenha cada prompt em uma única linha.${titleInstruction}
+Mantenha cada prompt em uma única linha.
 
 Formato esperado:
 1. [THUMBNAIL - prompt especializado para chunk 1]
@@ -635,23 +653,104 @@ Formato esperado:
         continue;
       }
 
-      try {
-        console.log(`🎨 Gerando imagem ${i + 1}/${prompts.length}...`);
-        const imageBuffer = await this.callWhiskAPI(prompt);
-        await this.saveImage(imageBuffer, i, outputDir);
+      // Tentar gerar imagem com correção automática de prompts inválidos
+      const success = await this.tryGenerateImageWithCorrection(prompt, i, outputDir);
+      
+      if (success) {
         console.log(`✅ Imagem ${i + 1} salva com sucesso`);
+      } else {
+        console.log(`❌ Pulando imagem ${i + 1} após 3 tentativas de correção`);
+      }
 
-        // Delay entre imagens para evitar rate limiting
-        if (i < prompts.length - 1) {
-          console.log(`⏳ Aguardando 3s antes da próxima imagem...`);
-          await new Promise(resolve => setTimeout(resolve, 3000));
-        }
-
-      } catch (error) {
-        console.error(`❌ Erro ao gerar imagem ${i + 1} após todas as tentativas:`, error.message);
-        console.log('Continuando com próxima imagem...');
+      // Delay entre imagens para evitar rate limiting
+      if (i < prompts.length - 1) {
+        console.log(`⏳ Aguardando 3s antes da próxima imagem...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
+  }
+
+  async tryGenerateImageWithCorrection(originalPrompt: string, imageIndex: number, outputDir: string): Promise<boolean> {
+    let currentPrompt = originalPrompt;
+    const maxCorrections = 3;
+
+    for (let correctionAttempt = 0; correctionAttempt < maxCorrections; correctionAttempt++) {
+      try {
+        console.log(`🎨 Gerando imagem ${imageIndex + 1} (tentativa ${correctionAttempt + 1}/3)...`);
+        const imageBuffer = await this.callWhiskAPI(currentPrompt);
+        await this.saveImage(imageBuffer, imageIndex, outputDir);
+        return true; // Sucesso!
+        
+      } catch (error) {
+        const isInvalidArgument = error.response?.status === 400 && 
+                                 error.response?.data?.error?.code === 400 &&
+                                 error.response?.data?.error?.status === 'INVALID_ARGUMENT';
+        
+        if (isInvalidArgument && correctionAttempt < maxCorrections - 1) {
+          console.log(`❌ Prompt inválido detectado. Pedindo correção ao ChatGPT...`);
+          
+          try {
+            const correctedPrompt = await this.fixInvalidPrompt(currentPrompt, error.response.data.error.message);
+            currentPrompt = correctedPrompt;
+            console.log(`🔄 Prompt corrigido. Tentando novamente...`);
+            
+          } catch (fixError) {
+            console.error(`❌ Erro ao corrigir prompt:`, fixError.message);
+            return false;
+          }
+          
+        } else {
+          console.error(`❌ Erro ao gerar imagem após ${correctionAttempt + 1} tentativas:`, error.message);
+          if (correctionAttempt === maxCorrections - 1) {
+            return false; // Falhou todas as tentativas
+          }
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  async fixInvalidPrompt(invalidPrompt: string, errorMessage: string): Promise<string> {
+    const correctionPrompt = `O seguinte prompt para geração de imagem foi rejeitado pelo Whisk API com erro 400:
+
+PROMPT INVÁLIDO:
+"${invalidPrompt}"
+
+ERRO RETORNADO:
+"${errorMessage}"
+
+Por favor, corrija este prompt removendo elementos que podem causar violação das políticas do Whisk:
+- Remova referências a pessoas reais específicas
+- Remova conteúdo violento, sexual ou inapropriado  
+- Simplifique descrições muito complexas
+- Mantenha o estilo e essência da cena
+- Retorne apenas o prompt corrigido, sem explicações
+
+PROMPT CORRIGIDO:`;
+
+    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'Você é um especialista em corrigir prompts de imagem para APIs que rejeitam conteúdo inadequado. Seja conciso e mantenha a essência da cena.'
+        },
+        {
+          role: 'user',
+          content: correctionPrompt
+        }
+      ],
+      max_tokens: 300,
+      temperature: 0.3
+    }, {
+      headers: {
+        'Authorization': `Bearer ${this.openaiApiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    return response.data.choices[0].message.content.trim();
   }
 
   async callWhiskAPI(prompt: string): Promise<Buffer> {
@@ -740,7 +839,7 @@ Formato esperado:
             try {
               const newToken = await this.consoleService.promptForNewToken();
               if (newToken && newToken.length > 10) {
-                this.updateWhiskToken(newToken);
+                await this.updateWhiskToken(newToken);
                 console.log(`🔄 Tentando novamente com o novo token...`);
                 continue; // Tentar novamente com novo token
               } else {
@@ -782,6 +881,70 @@ Formato esperado:
     console.log(`🖼️ Imagem ${imageIndex + 1} salva: ${fileName}`);
   }
 
+  async saveThumbnail(imageBuffer: Buffer, cleanTitle: string, outputDir: string): Promise<void> {
+    const fileName = `${cleanTitle}.jpg`;
+    const filePath = path.join(outputDir, fileName);
+    
+    await fs.writeFile(filePath, imageBuffer);
+    console.log(`🎯 Thumbnail salva: ${fileName}`);
+  }
+
+  async generateThumbnail(cleanTitle: string, outputDir: string, promptType: number): Promise<void> {
+    try {
+      console.log(`🎯 Criando thumbnail para: "${cleanTitle}"`);
+      
+      // Gerar prompt de thumbnail baseado no título e tipo de prompt
+      const thumbnailPrompt = await this.generateThumbnailPrompt(cleanTitle, promptType);
+      
+      // Gerar imagem com Whisk
+      const imageBuffer = await this.callWhiskAPI(thumbnailPrompt);
+      
+      // Salvar thumbnail com nome do título
+      await this.saveThumbnail(imageBuffer, cleanTitle, outputDir);
+      
+      console.log(`✅ Thumbnail gerada com sucesso: ${cleanTitle}.jpg`);
+      
+    } catch (error) {
+      console.error(`❌ Erro ao gerar thumbnail para "${cleanTitle}":`, error.message);
+    }
+  }
+
+  async generateThumbnailPrompt(cleanTitle: string, promptType: number): Promise<string> {
+    const specializedPrompt = this.getSpecializedPrompt(promptType);
+    
+    const prompt = `${specializedPrompt.userPrompt}
+
+TÍTULO DA HISTÓRIA: "${cleanTitle}"
+
+Crie um prompt de THUMBNAIL de alto CTR baseado neste título. 
+A thumbnail deve ser atraente, dramática e representar perfeitamente o tema "${cleanTitle}".
+Use o estilo especializado definido acima, mas focado especificamente neste título.
+Retorne apenas o prompt da thumbnail, uma única linha.`;
+
+    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: specializedPrompt.systemPrompt
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 300,
+      temperature: 0.7
+    }, {
+      headers: {
+        'Authorization': `Bearer ${this.openaiApiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    return response.data.choices[0].message.content.trim();
+  }
+
   private generateUUID(): string {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0;
@@ -798,7 +961,7 @@ Formato esperado:
     try {
       // Verificar se FFmpeg está instalado
       try {
-        await execAsync('ffmpeg -version');
+        await execAsync('ffmpeg -version', { maxBuffer: 1024 * 1024 * 5 }); // 5MB buffer
       } catch (error) {
         throw new Error(`FFmpeg não encontrado. Por favor, instale o FFmpeg:
         
@@ -832,23 +995,54 @@ Linux/Mac:
 
       console.log(`📊 Encontrados ${audioFiles.length} áudios e ${imageFiles.length} imagens`);
 
-      // Criar lista de inputs para FFmpeg
-      const videoSegments: string[] = [];
-      const minLength = Math.min(audioFiles.length, imageFiles.length);
+      // Verificar se temos imagens suficientes (2 imagens por áudio)
+      const requiredImages = audioFiles.length * 2;
+      if (imageFiles.length < requiredImages) {
+        console.warn(`⚠️ Aviso: Temos ${imageFiles.length} imagens, mas precisamos de ${requiredImages} (2 por áudio)`);
+        console.log(`Algumas imagens serão reutilizadas...`);
+      }
 
-      for (let i = 0; i < minLength; i++) {
+      // Criar lista de inputs para FFmpeg - 2 imagens por áudio
+      const videoSegments: string[] = [];
+
+      for (let i = 0; i < audioFiles.length; i++) {
         const audioFile = audioFiles[i];
-        const imageFile = imageFiles[i];
+        
+        // Usar 2 imagens para este áudio
+        const image1Index = (i * 2) % imageFiles.length;
+        const image2Index = (i * 2 + 1) % imageFiles.length;
+        
+        const image1 = imageFiles[image1Index];
+        const image2 = imageFiles[image2Index];
+        
         const segmentOutput = path.join(outputDir, `segment_${i + 1}.mp4`);
 
-        console.log(`🎥 Criando segmento ${i + 1}/${minLength}...`);
+        console.log(`🎥 Criando segmento ${i + 1}/${audioFiles.length} (2 imagens por áudio)...`);
+        console.log(`   📸 Imagem 1: ${path.basename(image1)}`);
+        console.log(`   📸 Imagem 2: ${path.basename(image2)}`);
 
-        // Comando FFmpeg para cada segmento
-        const ffmpegCommand = `ffmpeg -y -loop 1 -i "${imageFile}" -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black" -shortest "${segmentOutput}"`;
+        // Criar dois sub-segmentos: primeira metade e segunda metade do áudio
+        const segment1Output = path.join(outputDir, `segment_${i + 1}_part1.mp4`);
+        const segment2Output = path.join(outputDir, `segment_${i + 1}_part2.mp4`);
         
-        await execAsync(ffmpegCommand);
-        videoSegments.push(segmentOutput);
-        console.log(`✅ Segmento ${i + 1} criado: ${path.basename(segmentOutput)}`);
+        // Obter duração do áudio
+        const durationCommand = `ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${audioFile}"`;
+        const durationResult = await execAsync(durationCommand, { maxBuffer: 1024 * 1024 * 10 }); // 10MB buffer
+        const totalDuration = parseFloat(durationResult.stdout.trim());
+        const halfDuration = totalDuration / 2;
+        
+        // Primeira metade: primeira imagem + primeira metade do áudio
+        const ffmpegCommand1 = `ffmpeg -y -v error -loop 1 -i "${image1}" -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black" -t ${halfDuration} "${segment1Output}"`;
+        
+        // Segunda metade: segunda imagem + segunda metade do áudio  
+        const ffmpegCommand2 = `ffmpeg -y -v error -loop 1 -i "${image2}" -ss ${halfDuration} -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black" "${segment2Output}"`;
+        
+        await execAsync(ffmpegCommand1, { maxBuffer: 1024 * 1024 * 10 }); // 10MB buffer
+        await execAsync(ffmpegCommand2, { maxBuffer: 1024 * 1024 * 10 }); // 10MB buffer
+        
+        videoSegments.push(segment1Output);
+        videoSegments.push(segment2Output);
+        console.log(`✅ Segmento ${i + 1} criado em 2 partes (${halfDuration.toFixed(1)}s cada): ${path.basename(segment1Output)}, ${path.basename(segment2Output)}`);
       }
 
       // Criar arquivo de lista para concatenação
@@ -867,10 +1061,10 @@ Linux/Mac:
       }
       
       const finalOutput = path.join(outputDir, videoFileName);
-      const concatCommand = `ffmpeg -y -f concat -safe 0 -i "${listFile}" -c copy "${finalOutput}"`;
+      const concatCommand = `ffmpeg -y -v error -f concat -safe 0 -i "${listFile}" -c copy "${finalOutput}"`;
       
       console.log('🔗 Concatenando segmentos...');
-      await execAsync(concatCommand);
+      await execAsync(concatCommand, { maxBuffer: 1024 * 1024 * 10 }); // 10MB buffer
 
       // Limpar arquivos temporários
       console.log('🧹 Limpando arquivos temporários...');
