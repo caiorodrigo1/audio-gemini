@@ -43,6 +43,7 @@ export class ConsoleService {
     console.log('Digite o path do txt para converter em áudio (digite "exit" para sair):');
     console.log('Para múltiplos arquivos: separe os caminhos com vírgula');
     console.log('  Exemplo: "C:\\arquivo1.txt", "C:\\arquivo2.txt", "C:\\arquivo3.txt"');
+    console.log('Para renderizar vídeo de uma pasta existente: RENDER "C:\\caminho\\da\\pasta"');
     console.log('Os arquivos de áudio serão salvos nas respectivas pastas');
     console.log('');
     
@@ -56,6 +57,13 @@ export class ConsoleService {
         if (input.toLowerCase() === 'exit') {
           console.log('Até logo!');
           rl.close();
+          return;
+        }
+
+        // Verificar se é comando RENDER
+        if (input.trim().toUpperCase().startsWith('RENDER')) {
+          await processRender(input);
+          promptUser();
           return;
         }
 
@@ -120,6 +128,32 @@ export class ConsoleService {
       }
       
       return paths;
+    };
+
+    const processRender = async (input: string) => {
+      try {
+        // Extrair o caminho da pasta do comando RENDER
+        const match = input.match(/RENDER\s+"([^"]+)"/i);
+        if (!match) {
+          console.error('\n❌ Formato inválido para comando RENDER.');
+          console.log('Use: RENDER "C:\\caminho\\da\\pasta"');
+          console.log('');
+          return;
+        }
+        
+        const folderPath = match[1];
+        console.log(`\n🎬 Tentando renderizar vídeo da pasta: ${folderPath}`);
+        
+        const videoPath = await this.ttsService.retryVideoRendering(folderPath);
+        
+        console.log(`\n✅ Vídeo renderizado com sucesso!`);
+        console.log(`📹 Arquivo: ${videoPath}`);
+        console.log('');
+        
+      } catch (error) {
+        console.error('\n❌ Erro ao renderizar vídeo:', error.message);
+        console.log('');
+      }
     };
 
     const processFiles = async (input: string) => {
