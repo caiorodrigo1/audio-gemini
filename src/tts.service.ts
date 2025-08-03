@@ -41,7 +41,7 @@ class Timer {
 @Injectable()
 export class TTSService {
   private readonly openaiApiKey = "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";
-  private whiskToken = "ya29.a0AS3H6NyUZhCU2Esz83fZzyLW4i8_Pq2hCxA2GavCsbliqcc2wvTeliqj3IdWuW0Dz9ggsVy7S7B11HQoew9zJ8NVNFEvsUSpIlijiw4gZbKCElnjBAmSKs0sVSu4fe_tDg-ISFrlk5yJKg7SVdSw6f4sdmGWabcyz3q9lVoSPQCE0QaHXuYfKL3xbOApp3KHx7Yuii4VTXOIHSnfZZy1E0WwrGyh4B6wfKL297FaV2p1y82an3oPWC4GzSm0J13syojFfIv-t3EZjLXK7hMnXZolBj5AB2OvasTZ-B5y9di01VDaU40-E2GGlTC2KUF6l746cBCS4yVKqgaCgYKAcQSARISFQHGX2MiaePz9HMG051-49Pud8WClg0341";
+  private whiskToken = "ya29.A0AS3H6NyFk2cktUW8ZDIrHWAmedi0z09rCM3588SGb0tj5peZHUlpqFQSiKqtrV2J8U_hEK3_E_gueVhVkOCttq0KDBQkd-Q0_HnVqIgDVxN_PEXtvwmTeD0TPgnDP-L63HDiqj4pUJVcbwpYfTqerdGUgPqkpmlfR9NstLcIJ05aMvvoq3okcGKx57AmN-3sQgYVmFiYCLwZl-D7I8nigvS1wDMnLRkInTz0id5D5xfvFUD7ZNDIQTEJpZXNYVKKR0W-7WXfLPjWeMIyxttQ-Z2AEUjS9qgtgOkQ0uXWGAskwGrf3fblUs_wOAPoM7vb0I8GzgbYaeMiGo8YLOHB--KMTfpgbWpglsdF1B6pDSQaCgYKAY4SARYSFQHGX2Mihw5Cs-0adcypPV7lWV0rbg0370";
   private consoleService: any; // Referência para o console service
 
   setConsoleService(consoleService: any) {
@@ -122,7 +122,7 @@ For each chunk, emphasize: iconic American weapons (Winchester rifles, Colt .45)
         systemPrompt: 'You are a specialist in creating photorealistic image prompts for first-person elderly American life stories. Focus on American nostalgia, wisdom, subtle patriotism, and traditional values. Include vintage objects from 40s-70s, family values, and American Dream elements.',
         userPrompt: `Create detailed photorealistic image prompts for elderly American life stories.
 
-FOCUS: American nostalgia - vintage objects from 40s-70s. Wisdom and experience - wrinkles that tell stories. Subtle patriotism - flags, military medals, historic photos. Traditional values - family, hard work, American Dream.
+FOCUS: American nostalgia - vintage objects from 40s-70s. Wisdom and experience - wrinkles that tell stories. Subtle patriotism. Traditional values - family, hard work, American Dream.
 
 THUMBNAIL STYLE: Intimate photorealistic portrait of elderly American man (70-90s) with kind but knowing eyes, deep laugh lines, silver hair. Holding significant object (old photograph, military medal, vintage baseball, worn Bible). Background: cozy American home with family photos, American flag folded in triangle case, vintage radio. Warm window lighting suggesting sunset of life. Nostalgic color grading.
 
@@ -308,7 +308,7 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
   //   "AIzaSyBhd-XA1MsSkRN1TdtYR5CmdTVW8p2Svbk"
   // ];
 
-  private readonly maxLength = 3000;
+  private readonly maxLength = 2000;
 
   splitTextIntoChunks(text: string): TextChunk[] {
     console.log(`Texto recebido com ${text.length} caracteres`);
@@ -805,7 +805,7 @@ INSTRUÇÕES DE CONSISTÊNCIA VISUAL:
 - Para personagens secundários, mantenha consistência se aparecerem novamente
 
 INSTRUÇÕES DE FOTORREALISMO OBRIGATÓRIAS:
-- SEMPRE comece cada prompt com "Photorealistic" ou "Hyperrealistic"
+- SEMPRE comece cada prompt com "Photorealistic"
 - SEMPRE inclua "cinematic quality", "professional photography", "high detail"
 - SEMPRE especifique "realistic skin textures", "natural lighting", "authentic facial expressions"
 - NUNCA use palavras como "cartoon", "animated", "illustration", "drawing", "art", "painting"
@@ -1288,6 +1288,44 @@ Retorne apenas o prompt da thumbnail, uma única linha.`;
     });
   }
 
+  private async executeFFmpegWithRetry(command: string, description: string, maxRetries: number = 3): Promise<void> {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+    
+    let lastError: any;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`🔄 Retry ${attempt + 1}/${maxRetries} para ${description}...`);
+          // Backoff exponencial: 2s, 4s, 8s
+          const delay = Math.pow(2, attempt) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
+        await execAsync(command, { maxBuffer: 1024 * 1024 * 10, timeout: 60000 });
+        
+        if (attempt > 0) {
+          console.log(`✅ ${description} sucesso no retry ${attempt + 1}!`);
+        }
+        return; // Sucesso
+        
+      } catch (error) {
+        lastError = error;
+        console.error(`❌ Tentativa ${attempt + 1}/${maxRetries} falhou para ${description}: ${error.message}`);
+        
+        // Se for o último retry, não continuar
+        if (attempt === maxRetries - 1) {
+          break;
+        }
+      }
+    }
+    
+    console.error(`❌ Todas as ${maxRetries} tentativas falharam para ${description}`);
+    throw lastError;
+  }
+
   async renderVideoWithFFmpeg(outputDir: string, filePath?: string): Promise<string> {
     const { exec } = require('child_process');
     const util = require('util');
@@ -1398,7 +1436,7 @@ Linux/Mac:
         const ffmpegCommand1 = `ffmpeg -y -v error -loop 1 -i "${image1}" -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -t ${halfDuration} "${segment1Output}"`;
         
         try {
-          await execAsync(ffmpegCommand1, { maxBuffer: 1024 * 1024 * 10, timeout: 60000 }); // 60s timeout
+          await this.executeFFmpegWithRetry(ffmpegCommand1, `primeira parte do segmento ${i + 1}`);
           console.log(`✅ Primeira parte criada: ${path.basename(segment1Output)}`);
         } catch (ffmpegError1) {
           console.error(`❌ Erro na primeira parte:`, ffmpegError1.message);
@@ -1410,7 +1448,7 @@ Linux/Mac:
         const ffmpegCommand2 = `ffmpeg -y -v error -loop 1 -i "${image2}" -ss ${halfDuration} -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -t ${halfDuration} "${segment2Output}"`;
         
         try {
-          await execAsync(ffmpegCommand2, { maxBuffer: 1024 * 1024 * 10, timeout: 60000 }); // 60s timeout
+          await this.executeFFmpegWithRetry(ffmpegCommand2, `segunda parte do segmento ${i + 1}`);
           console.log(`✅ Segunda parte criada: ${path.basename(segment2Output)}`);
         } catch (ffmpegError2) {
           console.error(`❌ Erro na segunda parte:`, ffmpegError2.message);
