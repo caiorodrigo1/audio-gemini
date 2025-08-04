@@ -171,5 +171,56 @@ ELEMENTOS BRIDGERTON BRASILEIROS:
 IMPORTANTE: A thumbnail NÃO deve ser renderizada, apenas salva. O vídeo final deve receber o nome do título.
 
 Para cada chunk do texto, crie uma cena fotorrealista que complemente perfeitamente o conteúdo narrado, mantendo alta qualidade visual e apelo emocional.`
+  },
+
+  10: { // Santos Católicos - Jornada Humana até Santificação (IT)
+    systemPrompt: 'Sei uno specialista nella creazione di prompt fotorealistici per storie sulla trasformazione umana dei santi cattolici - dalla loro vita mortale, lotte, peccati e conversione fino alla santificazione. Concentrati sul percorso umano: gioventù, tentazioni, crisi spirituali, momenti di grazia, miracoli e beatificazione. Mostra la progressione da essere umano imperfetto a santo glorificato.',
+    userPrompt: `Crea prompt fotorealistici dettagliati per la storia completa della trasformazione dei santi cattolici, dalla vita umana alla santificazione.
+
+FOCUS SULLA TRASFORMAZIONE UMANA: Vita pre-conversione - gioventù, peccati, crisi esistenziali, dubbi di fede. Momento della chiamata - visioni, illuminazioni, incontri che cambiano la vita. Lotta spirituale - tentazioni, penitenze, sacrifici, sofferenze. Crescita nella santità - miracoli, estasi, servizio agli altri. Morte e beatificazione - martirio o morte naturale, primi miracoli postumi.
+
+STILE THUMBNAIL TRASFORMAZIONE: Composizione fotorealistica che mostra la dualità umano/divino, shot con 85mm lens, shallow depth of field, cinematic quality. PRIMA: giovane persona (20-30 anni) in abiti secolari del periodo storico, espressione di ricerca/dubbio, occhi inquieti, in ambiente mondano (palazzo, taverna, campo di battaglia). DOPO: stessa persona trasformata in santo maturo, volto sereno con leggero bagliore mistico, abiti religiosi o del martirio, aureola sottile, in ambiente sacro. Transizione drammatica con luce divina che attraversa l'immagine dal lato "santo". Elementi simbolici: croce che separa i due momenti, rose che sbocciano, catene spezzate.
+
+FASI DELLA TRASFORMAZIONE:
+• GIOVENTÙ MONDANA: abiti ricchi/militari/secolari, espressioni di orgoglio/lussuria/ira, ambienti di peccato (corti, battaglie, feste)
+• CRISI SPIRITUALE: volto tormentato, lacrime, preghiera solitaria, libri sacri aperti, lotta interiore visibile
+• CONVERSIONE: momento epifanico, luce dall'alto, caduta da cavallo (San Paolo), visione di Cristo/Madonna, abbandono ricchezze
+• PENITENZA: cilici, digiuni, celle spartane, preghiera notturna, mortificazioni, servizio ai poveri
+• SANTIFICAZIONE: estasi mistiche, stigmate, levitazione, guarigioni miracolose, predicazione alle folle
+• MORTE SANTA: martirio coraggioso o morte in pace, ultimi sacramenti, visioni del Paradiso
+
+ESEMPI SPECIFICI DI TRASFORMAZIONE:
+• Sant'Agostino: da giovane dissoluto a vescovo dottore - libertinaggio → conversione nel giardino → predicazione
+• San Francesco: da ricco mercante a poverello - feste e guerra → spogliazione davanti al vescovo → pace con i lupi
+• Santa Teresa d'Avila: da suora tiepida a mistica riformatrice - vanità mondane → trasverberazione → fondazione monasteri
+• San Paolo: da persecutore a apostolo - strada per Damasco → cecità → predicazione ai gentili
+• Santa Maria Maddalena: da peccatrice a discepola - vita dissoluta → unzione di Cristo → prima testimone resurrezione
+• San Matteo: da pubblicano disprezzato a evangelista - riscossione tasse → chiamata di Gesù → martirio missionario
+
+ELEMENTI VISIVI DELLA PROGRESSIONE:
+• COLORI EVOLUTIVI: dal grigio/rosso sangue (peccato) → viola (penitenza) → bianco/oro (santità)
+• ILLUMINAZIONE PROGRESSIVA: da ombre pesanti → luce filtrata → luce divina piena
+• SGUARDO TRASFORMATO: da occhi spenti/arrabbiati → sofferenti/cercatori → sereni/luminosi
+• POSTURA: da corporale/terrena → inginocchiata/umile → elevata/celestiale
+
+ACCURATEZZA STORICA PER PERIODO:
+• Martiri primi secoli: tuniche romane, arene, catacombe, simboli cristiani nascosti
+• Padri del deserto (III-V sec.): abiti di pelli, grotte, deserti egiziani, tentazioni demoniache
+• Santi medievali (VI-XII sec.): abiti monastici, castelli, villaggi, crociate, peste
+• Mistici rinascimentali (XIII-XVI sec.): abiti franciscani/domenicani, università, arte sacra
+• Santi controriforma (XVI-XVII sec.): missioni, seminari, barocco, nuovi continenti
+• Martiri moderni (XVIII-XX sec.): abiti civili, prigioni, guerre mondiali, totalitarismi
+
+MOMENTI CHIAVE DA RAPPRESENTARE:
+• IL PRIMA: vita nel peccato o tiepidezza spirituale
+• LA CHIAMATA: momento preciso della conversione
+• LA LOTTA: battaglia spirituale e penitenze
+• I MIRACOLI: primi segni della santità
+• LA MORTE: martirio o morte santa
+• LA GLORIA: beatificazione e venerazione
+
+TECNICA PITTORICA: Stile che evolve da tenebroso (Caravaggio giovane) per il periodo pre-conversione, a luminoso e dorato (Beato Angelico) per la santificazione. Contrasti drammatici luce/ombra per sottolineare la trasformazione spirituale.
+
+Per ogni chunk del testo, crea una scena fotorealistica che mostri la specifica fase della trasformazione del santo descritto, enfatizzando il percorso umano di crescita spirituale dalla imperfezione alla perfezione cristiana. Ogni immagine deve raccontare una storia di redenzione e speranza umana.`
   }
 };

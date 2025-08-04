@@ -469,7 +469,7 @@ export class TTSService {
             7: 'Famílias Italiano (IT)',
             8: 'Milionários Romeno (RO)',
             9: 'Bridgerton Brasileiro (PT-BR)',
-            10: 'Santos Católicos (IT)'
+            10: 'Jornada dos Santos - Humano até Santificação (IT)'
           };
           totalTimer.log(`📁 Código detectado: ${ytCode} → ${promptNames[promptType] || `Prompt tipo ${promptType}`}`);
         } else {
@@ -634,7 +634,7 @@ Seja específico e detalhado para garantir consistência visual.`;
       7: 'Famílias Italiano (IT)',
       8: 'Milionários Romeno (RO)',
       9: 'Bridgerton Brasileiro (PT-BR)',
-      10: 'Santos Católicos (IT)'
+      10: 'Jornada dos Santos - Humano até Santificação (IT)'
     };
     
     console.log(`🎨 Usando prompt especializado: ${promptNames[promptType] || `Tipo ${promptType}`}`);
