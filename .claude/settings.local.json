@@ -12,7 +12,9 @@
       "Bash(cp:*)",
       "Bash(npm run:*)",
       "Bash(rm:*)",
-      "Bash(ffmpeg:*)"
+      "Bash(ffmpeg:*)",
+      "Bash(move:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

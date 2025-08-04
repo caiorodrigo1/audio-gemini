@@ -2,47 +2,24 @@ import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { loadEnvConfig, EnvConfig } from '../config/env.config';
+import { IMAGE_PROMPTS, YT_CODE_MAPPING, GENERAL_PROMPT, PromptConfig } from '../config/prompts.config';
+import { Timer } from '../utils/timer.util';
+import { TextChunk } from '../interfaces/text-chunk.interface';
+import { WhiskApiResponse, WhiskApiPayload } from '../interfaces/whisk-response.interface';
+import { AUDIO_CONFIG, BATCH_SIZES, TIMEOUTS, FILE_PATTERNS } from '../constants';
 
-interface TextChunk {
-  text: string;
-  chunkIndex: number;
-  apiKey: string;
-}
-
-class Timer {
-  private startTime: number;
-  private taskName: string;
-
-  constructor(taskName: string) {
-    this.taskName = taskName;
-    this.startTime = Date.now();
-  }
-
-  getElapsedTime(): string {
-    const elapsed = Date.now() - this.startTime;
-    const minutes = Math.floor(elapsed / 60000);
-    const seconds = Math.floor((elapsed % 60000) / 1000);
-    return `${minutes}m ${seconds}s`;
-  }
-
-  log(message: string): void {
-    console.log(`[${this.getElapsedTime()}] ${message}`);
-  }
-
-  logStart(): void {
-    console.log(`⏱️ [0m 0s] Iniciando: ${this.taskName}`);
-  }
-
-  logEnd(): void {
-    console.log(`✅ [${this.getElapsedTime()}] Concluído: ${this.taskName}`);
-  }
-}
 
 @Injectable()
 export class TTSService {
-  private readonly openaiApiKey = "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";
-  private whiskToken = "ya29.A0AS3H6NyFk2cktUW8ZDIrHWAmedi0z09rCM3588SGb0tj5peZHUlpqFQSiKqtrV2J8U_hEK3_E_gueVhVkOCttq0KDBQkd-Q0_HnVqIgDVxN_PEXtvwmTeD0TPgnDP-L63HDiqj4pUJVcbwpYfTqerdGUgPqkpmlfR9NstLcIJ05aMvvoq3okcGKx57AmN-3sQgYVmFiYCLwZl-D7I8nigvS1wDMnLRkInTz0id5D5xfvFUD7ZNDIQTEJpZXNYVKKR0W-7WXfLPjWeMIyxttQ-Z2AEUjS9qgtgOkQ0uXWGAskwGrf3fblUs_wOAPoM7vb0I8GzgbYaeMiGo8YLOHB--KMTfpgbWpglsdF1B6pDSQaCgYKAY4SARYSFQHGX2Mihw5Cs-0adcypPV7lWV0rbg0370";
-  private consoleService: any; // Referência para o console service
+  private readonly config: EnvConfig;
+  private whiskToken: string;
+  private consoleService: any;
+
+  constructor() {
+    this.config = loadEnvConfig();
+    this.whiskToken = this.config.whiskToken;
+  }
 
   setConsoleService(consoleService: any) {
     this.consoleService = consoleService;
@@ -80,235 +57,21 @@ export class TTSService {
   }
 
   extractYTCodeFromPath(filePath: string): string | null {
-    // Extrair código YT do path ou filename como "YT01", "YT02", etc.
-    const match = filePath.match(/YT(\d{2})/i);
+    const match = filePath.match(FILE_PATTERNS.YT_CODE);
     return match ? match[0].toUpperCase() : null;
   }
 
   getPromptTypeByYTCode(ytCode: string): number {
-    const mapping: { [key: string]: number } = {
-      'YT01': 4,             // Bridgerton Inglês (EN)
-      'YT02': 1,             // Wild West Romance (EN-US)
-      'YT03': 6,             // Histórias milionários (PL)
-      'YT04': 7,             // Histórias famílias (IT)
-      'YT05': 8,             // Histórias milionários (RO)
-      'YT06': 9,             // Bridgerton Brasileiro (PT-BR)
-      'YT11': 1,             // Wild West (EN-US)
-      'YT12': 2,             // Crônicas old man (EN-US)
-      'YT13': 3              // Pessoas desaparecidas (PT-BR)
-    };
-    return mapping[ytCode] || 4; // Default para prompt 4
+    return YT_CODE_MAPPING[ytCode] || 4; // Default para prompt 4
   }
 
-  getSpecializedPrompt(promptType: number): { systemPrompt: string, userPrompt: string } {
-    const prompts = {
-      1: { // Wild West (EN-US)
-        systemPrompt: 'You are a specialist in creating PHOTOREALISTIC image prompts for Wild West stories targeting American audiences. CRITICAL: Every prompt MUST be photorealistic, never cartoon or illustration. Focus on action, confrontation, heroic individualism, and iconic American frontier elements. Always include authentic American western details: Colt Peacemakers, Stetson hats, saloons, sheriff stars, Monument Valley landscapes. CRITICAL: Maintain visual consistency of characters across all scenes.',
-        userPrompt: `Create detailed PHOTOREALISTIC image prompts for Wild West scenes. EVERY prompt must start with "Photorealistic" and include camera details.
-
-FOCUS: Action and confrontation - Americans love westerns with gunfights and duels. Heroic individualism - lone cowboy against adversity. Monumental landscapes - Grand Canyon, Monument Valley, vast deserts. American nostalgia - iconic elements like saloons, sheriffs, bandits.
-
-THUMBNAIL STYLE: Photorealistic professional photograph, cinematic Netflix-style thumbnail featuring rugged American cowboys in classic showdown, shot with 85mm lens, shallow depth of field. Focus on: weathered faces with realistic skin textures and stubble, authentic period Stetsons, leather holsters with Colt Peacemakers, sheriff stars, dusty boots with spurs. Setting: iconic American frontier town with wooden boardwalks, swinging saloon doors, tumbleweeds. Harsh desert sun lighting creating deep shadows, dust particles in air, cinematic quality. American flag subtly visible.
-
-CRITICAL CHARACTER CONSISTENCY:
-- ALWAYS specify exact facial features for each character (eye color, nose shape, jaw line, scars, facial hair style)
-- Use the SAME character descriptions across all scenes
-- For example: "The protagonist (weathered 45-year-old man with steel-gray eyes, prominent square jaw, salt-and-pepper stubble, scar above left eyebrow, wearing black Stetson)"
-- Keep supporting characters consistent if they appear multiple times
-
-For each chunk, emphasize: iconic American weapons (Winchester rifles, Colt .45), Old West symbols (horseshoes, lassos, badges), typical bars with poker/whiskey/piano, frontier spirit and American freedom.`
-      },
-      2: { // Old Man Chronicles (EN-US)
-        systemPrompt: 'You are a specialist in creating photorealistic image prompts for first-person elderly American life stories. Focus on American nostalgia, wisdom, subtle patriotism, and traditional values. Include vintage objects from 40s-70s, family values, and American Dream elements.',
-        userPrompt: `Create detailed photorealistic image prompts for elderly American life stories.
-
-FOCUS: American nostalgia - vintage objects from 40s-70s. Wisdom and experience - wrinkles that tell stories. Subtle patriotism. Traditional values - family, hard work, American Dream.
-
-THUMBNAIL STYLE: Intimate photorealistic portrait of elderly American man (70-90s) with kind but knowing eyes, deep laugh lines, silver hair. Holding significant object (old photograph, military medal, vintage baseball, worn Bible). Background: cozy American home with family photos, American flag folded in triangle case, vintage radio. Warm window lighting suggesting sunset of life. Nostalgic color grading.
-
-For each chunk, include: American historical landmarks (JFK photos, moon landing, Vietnam), vintage objects (classic cars, old radios, typewriters), generational moments (50s dances, drive-ins, diners), golden nostalgic lighting.`
-      },
-      3: { // Pessoas Desaparecidas (PT-BR)
-        systemPrompt: 'Você é especialista em criar prompts fotorrealistas para histórias de pessoas desaparecidas no Brasil. Foque no regionalismo brasileiro, diversidade étnica, elementos culturais e realismo social. Inclua sempre elementos autênticos brasileiros.',
-        userPrompt: `Crie prompts fotorrealistas detalhados para histórias de pessoas desaparecidas no Brasil.
-
-FOCO: Regionalismo brasileiro - favelas, sertão, cidades do interior. Diversidade étnica - rostos brasileiros autênticos. Elementos culturais - santos, fitas do Senhor do Bonfim, terços. Realismo social - cartazes de "Procura-se", delegacias precárias.
-
-ESTILO THUMBNAIL: Composição fotorrealista impactante de mãe brasileira (30-50 anos) segurando foto desgastada de pessoa desaparecida, lágrimas nos olhos, expressão de desespero e esperança. Vestimenta simples típica brasileira. Fundo: mural de desaparecidos em delegacia ou poste de rua, cartazes de "PROCURA-SE" amarelados. Iluminação natural brasileira forte. Elementos: terço nas mãos, fitinha do Bonfim no pulso. Cores vibrantes mas melancólicas.
-
-Para cada chunk, mostre: cenários brasileiros reais (ruas de paralelepípedo, casas coloridas simples), detalhes culturais (imagens de santos, altares domésticos), diversidade regional (nordeste árido, favelas cariocas, interior paulista), rostos brasileiros autênticos com traços indígenas, africanos, europeus misturados.`
-      },
-      4: { // Romances Estilo Bridgerton (Regência Inglesa)
-        systemPrompt: 'You are a specialist in creating PHOTOREALISTIC image prompts for Bridgerton-style historical romances set in English Regency period (1811-1820). CRITICAL: Every prompt MUST be photorealistic, never cartoon or illustration. Focus on London high society, authentic Regency fashion, grand estates, lavish balls, and English aristocracy. Capture the exact Netflix Bridgerton aesthetic with opulent details and romantic atmosphere. CRITICAL: Maintain visual consistency of characters across all scenes.',
-        userPrompt: `Create detailed PHOTOREALISTIC image prompts for Bridgerton-style Regency romances set in London. EVERY prompt must start with "Photorealistic" and include camera details.
-
-BRIDGERTON FOCUS: Regency London (1811-1820) - Mayfair society, ton gatherings, English aristocracy. Authentic Regency fashion - empire waist gowns, spencer jackets, pelisses, bonnets, gloves. Men in tailcoats, breeches, cravats, top hats. Settings: Grosvenor Square ballrooms, Hyde Park, country estates, drawing rooms.
-
-BRIDGERTON THUMBNAIL STYLE: Photorealistic professional photograph, opulent Netflix-style scene with English Regency couple, shot with 85mm lens, shallow depth of field, cinematic quality. Woman: empire waist silk gown with intricate beadwork, long gloves, elaborate hair with pearls and feathers, English rose complexion with realistic skin textures. Man: dark blue tailcoat with gold buttons, white cravat, fitted breeches, polished boots, authentic facial details. Setting: grand Mayfair ballroom with crystal chandeliers, marble columns, English garden flowers. Natural candlelight illumination creating dramatic shadows. Rich colors: deep blues, gold, ivory, burgundy.
-
-CRITICAL CHARACTER CONSISTENCY:
-- ALWAYS specify exact facial features for each character (eye color, nose shape, bone structure, hair texture, skin tone)
-- Use the SAME character descriptions across all scenes
-- For example: "The heroine (elegant 22-year-old woman with emerald green eyes, delicate upturned nose, heart-shaped face, auburn curls with golden highlights, porcelain skin with rosy cheeks)"
-- For example: "The duke (striking 28-year-old man with piercing blue eyes, strong Roman nose, defined cheekbones, dark brown hair with natural waves, aristocratic bearing)"
-- Keep supporting characters consistent if they appear multiple times
-
-AUTHENTIC BRIDGERTON ELEMENTS:
-• LOCATIONS: Grosvenor Square ballrooms, Hyde Park promenades, English country estates, Almack's assembly rooms, Bond Street shops, Vauxhall Gardens
-• WOMEN'S FASHION: Empire waist gowns in silk/muslin, spencer jackets, pelisses, bonnets with ribbons, long gloves, reticules, fans, jewelry with pearls/diamonds
-• MEN'S FASHION: Dark tailcoats, white/colored waistcoats, cravats, fitted breeches, Hessian boots, top hats, walking sticks
-• DECOR: Crystal chandeliers, gilded mirrors, Chippendale furniture, Persian rugs, silk wallpaper, oil paintings, fresh flowers
-• ENGLISH FLOWERS: Roses, peonies, lavender, jasmine, lily of the valley, arrangements in Chinese porcelain vases
-• ATMOSPHERE: English propriety, forbidden romance, social intrigue, masked balls, secret garden meetings, carriage rides through London
-
-For each chunk, create scenes of: Mayfair ballroom dancing, Hyde Park promenades, tea in drawing rooms, opera at Covent Garden, country house parties, morning calls in London townhouses.`
-      },
-      5: { // Velho Oeste Espanhol (ES)
-        systemPrompt: 'Eres especialista en crear prompts fotorrealistas para historias del Viejo Oeste con estilo español. Enfócate en el estilo Spaghetti Western, drama y honor españoles, paisajes áridos ibéricos y toques flamencos.',
-        userPrompt: `Crea prompts fotorrealistas detallados para historias del Viejo Oeste español.
-
-ENFOQUE: Estilo Spaghetti Western - influencia de Sergio Leone. Drama y honor - conceptos españoles de venganza y honor. Paisajes áridos ibéricos - Almería, Bardenas Reales. Toque flamenco - guitarras, castañuelas, elementos moriscos.
-
-ESTILO THUMBNAIL: Composición cinematográfica estilo western europeo con pistolero solitario con sombrero cordobés y poncho español enfrentando antagonista. Rostros curtidos mediterráneos, ojos oscuros intensos. Escenario: pueblo español adaptado como western, arquitectura con arcos moriscos, plaza de toros al fondo. Iluminación dramática del mediodía español. Elementos: guitarra española, cruz católica, navaja. Colores tierra con rojos sangre.
-
-Para cada chunk, mezclar: arquitectura española con western (misiones, haciendas), elementos católicos (cruces, santos, procesiones), honor español en duelos y venganzas, paleta de colores ibérica (ocres, rojos, negros).`
-      },
-      6: { // Histórias Milionários Polonês (PL)
-        systemPrompt: 'Jesteś specjalistą tworzenia fotorealistycznych promptów dla emocjonalnych historii milionerów w Polsce. Skup się na głębokich emocjach, kontrastach społecznych, elementach polskich i melancholii słowiańskiej.',
-        userPrompt: `Twórz szczegółowe fotorealistyczne prompty dla emocjonalnych historii polskich milionerów.
-
-FOKUS: Głębokie emocje - Polacy cenią intensywne dramaty rodzinne. Kontrast społeczny - nowe bogactwo vs stare tradycje. Elementy polskie - architektura Warszawy, zamki, kościoły. Melancholia słowiańska - nostalgia, zaduma, refleksja.
-
-STYL THUMBNAIL: Dramatyczna scena emocjonalna z polskim milionerem (50-60 lat) w eleganckim garniturze, trzymającym stare zdjęcie rodzinne, łzy w oczach. Twarz słowiańska z głębokimi zmarszczkami. Tło: luksusowe wnętrze z widokiem na Pałac Kultury lub Stare Miasto. Kontrasty: drogie meble i proste polskie pamiątki (krzyż, stara ikona). Oświetlenie: zimne światło zimowe przez okno. Elementy: polski orzeł subtelnie widoczny.
-
-Dla każdego chunka pokazuj: kontrasty emocjonalne (bogactwo vs prostota dzieciństwa), symbole polskie (biały orzeł, bursztyn, premium vodka), intensywne słowiańskie wyrażenia (głęboka melancholia, wybuchowa radość), zimne oświetlenie typowe dla polskiej zimy.`
-      },
-      7: { // Histórias Famílias Italiano (IT)
-        systemPrompt: 'Sei uno specialista nella creazione di prompt fotorealistici per storie emozionanti di famiglie italiane. Concentrati sui legami familiari indistruttibili, gestualità italiana, scenari iconici e cibo come amore.',
-        userPrompt: `Crea prompt fotorealistici dettagliati per storie emozionanti di famiglie italiane.
-
-FOCUS: Famiglia è tutto - legami familiari indistruttibili. Gestualità italiana - mani espressive, abbracci calorosi. Scenari iconici - Toscana, villaggi costieri, piazze storiche. Cibo come amore - tavole imbandite, nonne che cucinano.
-
-STILE THUMBNAIL: Scena familiare carica di emozione con famiglia italiana multigenerazionale in momento drammatico. Nonna (80 anni) al centro con mani espressive, circondata da figli e nipoti. Volti mediterranei autentici, lacrime e sorrisi misti. Ambientazione: cucina rustica toscana o terrazza con vista mare. Tavola con pasta, vino, pane. Illuminazione calda dorata. Elementi: foto di famiglia, crocifisso, ramoscelli d'ulivo.
-
-Per ogni chunk, enfatizza: gesti italiani (mani che parlano, abbracci drammatici), tre generazioni sempre insieme, cibo come elemento emotivo (preparazione, condivisione), luce mediterranea dorata e calda.`
-      },
-      8: { // Histórias Milionários Romeno (RO)
-        systemPrompt: 'Ești specialist în crearea de prompt-uri fotorealiste pentru povești emoționante despre milionari români. Concentrează-te pe misterul Carpaților, atmosfera gotică română, drama balcanică și contrastele dintre modernitate și tradiții medievale.',
-        userPrompt: `Creează prompt-uri fotorealiste detaliate pentru povești emoționante despre milionari români.
-
-FOCUS: Misterul Carpaților - atmosferă gotică românească. Nou bogat vs aristocrație - castele, tradiții vechi. Dramă balcanică - pasiuni intense, răzbunări familiale. Contraste - modernitate vs tradiții medievale.
-
-STIL THUMBNAIL: Scenă dramatică foto-realistă cu milionar român (45-55 ani) în costum elegant, privind castelul strămoșesc din Carpați. Față est-europeană distinctivă, expresie complexă între triumf și melancolie. Fundal: castel gotic românesc în ceață, munți dramatici. Contrast: Rolls Royce modern lângă poartă medievală. Iluminare: amurg misterios, ceață în văi. Elemente: veche stemă familiei, crucifix ortodox. Culori: negru, burgundy, auriu.
-
-Pentru fiecare chunk, amestecă: elemente moderne și medievale (mașini de lux în castele), misticismul românesc (ceață, păduri întunecate, corbi), biserica ortodoxă (icoane aurite, lumânări), atmosfera gotică a Carpaților.`
-      },
-      9: { // Bridgerton Brasileiro (PT-BR)
-        systemPrompt: 'Você é especialista em criar prompts fotorrealistas para romances históricos estilo Bridgerton ambientados no Brasil Imperial (1822-1889). Foque na alta sociedade brasileira, moda da Regência adaptada ao clima tropical, palácios imperiais, fazendas de café e a corte de D. Pedro II. Misture elegância europeia com exuberância tropical brasileira.',
-        userPrompt: `Crie prompts fotorrealistas detalhados para romances históricos estilo Bridgerton no Brasil Imperial.
-
-FOCO BRIDGERTON BRASILEIRO: Período Imperial Brasileiro (1822-1889) - Corte de D. Pedro II, alta sociedade carioca e paulista. Moda Regência tropicalizada - vestidos império em tecidos leves, corpetes bordados com motivos tropicais, luvas de renda, leques de plumas de avestruz. Homens em casacas de linho, coletes bordados, cartolas. Cenários: Palácio de São Cristóvão, Quinta da Boa Vista, Teatro São Pedro, fazendas de café do Vale do Paraíba.
-
-ESTILO THUMBNAIL BRIDGERTON BRASILEIRO: Cena opulenta estilo Netflix com casal da aristocracia imperial brasileira. Mulher: vestido império em seda clara com bordados inspirados na flora tropical, corpete ajustado, luvas longas de renda, cabelos em penteado elaborado com flores de ipê, pele morena dourada aristocrática. Homem: casaca azul imperial com botões dourados, colete bordado com café e cana-de-açúcar, calças justas, cartola, bengala de jacarandá. Cenário: salão de baile do Paço Imperial com lustres de cristal de Baccarat, cortinas de seda francesa, arranjos tropicais luxuosos. Iluminação dourada de velas e lustres. Cores imperiais: azul, dourado, verde e amarelo sutis.
-
-ELEMENTOS BRIDGERTON BRASILEIROS:
-• LOCAIS: Paço Imperial Rio de Janeiro, Palácio de Petrópolis, Teatro São João, Jardim Botânico Imperial, fazendas baronesas do café, casarões de Botafogo
-• MODA FEMININA: Vestidos império em musselina e seda, corpetes com bordados de orquídeas e beija-flores, xales de cashmere, joias com pedras preciosas brasileiras (esmeraldas, águas-marinhas), leques de plumas exóticas
-• MODA MASCULINA: Casacas de linho fino, coletes com bordados tropicais, gravatas de seda, cartolas de feltro, bengalas de madeiras nobres brasileiras (jacarandá, pau-brasil)
-• DECORAÇÃO: Lustres franceses, móveis Império tropicalizados, tapetes persas, cortinas de damasco, porcelanas da Companhia das Índias, vasos com orquídeas e bromélias
-• FLORES TROPICAIS NOBRES: Orquídeas imperiais, helicônias douradas, antúrios vermelhos, flores de ipê amarelo, arranjos com frutas tropicais cristalizadas
-• ATMOSFERA: Opulência tropical imperial, romance na corte brasileira, intrigas palaciais, bailes mascarados, encontros secretos em jardins imperiais
-
-IMPORTANTE: A thumbnail NÃO deve ser renderizada, apenas salva. O vídeo final deve receber o nome do título.
-
-Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos no Jardim Botânico, passeios de carruagem pela Tijuca, saraus na corte, corridas no Jockey Club, cerimônias na Capela Imperial.`
-      }
-    };
-
-    return prompts[promptType] || prompts[4]; // Default to type 4
+  getSpecializedPrompt(promptType: number): PromptConfig {
+    return IMAGE_PROMPTS[promptType] || GENERAL_PROMPT;
   }
   
-  // private readonly apiKeys = [
-  //   "AIzaSyArTATX_unM1LvawzEQ5uU0LDqj0nyewo4",
-  //   "AIzaSyDpZBlFJjTo98ts-bOQpiiIeQUzEoYqDIs",
-  //   "AIzaSyCMbntXryqM1_AR-XxDuM4OUP9E8uws844",
-  //   "AIzaSyD2KremXOGRuyOC-VdkeIXRysO2zgh235A",
-  //   "AIzaSyA54kiI-D7cdKQpjWzSCKIYtGq7OZ-QzLA",
-  //   "AIzaSyDpfay9oWW7R6B1UXPZHDU8C5MMCrxTTTA",
-  //   "AIzaSyBjVKr4P1ZSIiuFabIij3783xQshWt4fbA",
-  //   "AIzaSyA6Ui7v5ivkkjOIFQb00gH31c9hdPqnufw",
-  //   "AIzaSyDfFvy7Mw3inP8vh0JyQKG15hH49x2kYEA",
-  //   "AIzaSyAGWERC1INGqwW4iMYP7rQnUXY3R1eFjFE",
-  //   "AIzaSyCBem2bjbJ828wD8klMPRns0uESLNDgnCQ",
-  //   "AIzaSyDRRJATLaDxBhzBI7uEGFjNIex_Ys6eZxM",
-  //   "AIzaSyA3C2nCth7Lhbv0DeF7-iDilyePOwS7ASw",
-  //   "AIzaSyCY6iFLmD7aHPouoMKSmEhqKDL9WCyp_9A",
-  //   "AIzaSyDMUxlPUti4UgZ0qo5hvvAZ8kcMk36Hh88",
-  //   "AIzaSyAkVDg7qQng5P6FMRtcqdpdUOByQ5hXcAM",
-  //   "AIzaSyDy-wAc8vbLvpv4sBf60MMweBzaDYTWPaA",
-  //   "AIzaSyCNVmiFwuyKP7f1InBXngrflHp7-ADLW-M",
-  //   "AIzaSyCXYrPNUdNPHJSGpx6jS4jYcUjU8BVvNhE",
-  //   "AIzaSyDC_a83LliyC9RqBh7rJ9Ct-RSPD9msZ3M",
-  //   "AIzaSyAQUIt_HZ3jm_petnAQB-M5DTc7niuWcqA",
-  //   "AIzaSyBWSKNqFT8Gu7bq0MnoAHUQCAwWWcPLs9o",
-  //   "AIzaSyBkBKw3NkOTA9GgIKYhVAkEB7UFG_IpMWA",
-  //   "AIzaSyBhd-XA1MsSkRN1TdtYR5CmdTVW8p2Svbk"
-  // ];
-
-  private readonly apiKeys = [
-    "AIzaSyBhd-XA1MsSkRN1TdtYR5CmdTVW8p2Svbk",
-    "AIzaSyBkBKw3NkOTA9GgIKYhVAkEB7UFG_IpMWA",
-    "AIzaSyBWSKNqFT8Gu7bq0MnoAHUQCAwWWcPLs9o",
-    "AIzaSyAQUIt_HZ3jm_petnAQB-M5DTc7niuWcqA",
-    "AIzaSyDC_a83LliyC9RqBh7rJ9Ct-RSPD9msZ3M",
-    "AIzaSyCXYrPNUdNPHJSGpx6jS4jYcUjU8BVvNhE",
-    "AIzaSyCNVmiFwuyKP7f1InBXngrflHp7-ADLW-M",
-    "AIzaSyAkVDg7qQng5P6FMRtcqdpdUOByQ5hXcAM",
-    "AIzaSyArTATX_unM1LvawzEQ5uU0LDqj0nyewo4",
-    "AIzaSyDpZBlFJjTo98ts-bOQpiiIeQUzEoYqDIs",
-    "AIzaSyCMbntXryqM1_AR-XxDuM4OUP9E8uws844",
-    "AIzaSyD2KremXOGRuyOC-VdkeIXRysO2zgh235A",
-    "AIzaSyA54kiI-D7cdKQpjWzSCKIYtGq7OZ-QzLA",
-    "AIzaSyDpfay9oWW7R6B1UXPZHDU8C5MMCrxTTTA",
-    "AIzaSyBjVKr4P1ZSIiuFabIij3783xQshWt4fbA",
-    "AIzaSyA6Ui7v5ivkkjOIFQb00gH31c9hdPqnufw",
-    "AIzaSyDfFvy7Mw3inP8vh0JyQKG15hH49x2kYEA",
-    "AIzaSyAGWERC1INGqwW4iMYP7rQnUXY3R1eFjFE",
-    "AIzaSyCBem2bjbJ828wD8klMPRns0uESLNDgnCQ",
-    "AIzaSyDRRJATLaDxBhzBI7uEGFjNIex_Ys6eZxM",
-    "AIzaSyA3C2nCth7Lhbv0DeF7-iDilyePOwS7ASw",
-    "AIzaSyCY6iFLmD7aHPouoMKSmEhqKDL9WCyp_9A",
-    "AIzaSyDMUxlPUti4UgZ0qo5hvvAZ8kcMk36Hh88"
-  ];
-
-  // private readonly apiKeys = [
-  //   "AIzaSyDfFvy7Mw3inP8vh0JyQKG15hH49x2kYEA",
-  //   "AIzaSyAGWERC1INGqwW4iMYP7rQnUXY3R1eFjFE",
-  //   "AIzaSyCBem2bjbJ828wD8klMPRns0uESLNDgnCQ",
-  //   "AIzaSyDRRJATLaDxBhzBI7uEGFjNIex_Ys6eZxM",
-  //   "AIzaSyA3C2nCth7Lhbv0DeF7-iDilyePOwS7ASw",
-  //   "AIzaSyCY6iFLmD7aHPouoMKSmEhqKDL9WCyp_9A",
-  //   "AIzaSyDMUxlPUti4UgZ0qo5hvvAZ8kcMk36Hh88",
-  //   "AIzaSyAkVDg7qQng5P6FMRtcqdpdUOByQ5hXcAM",
-  //   "AIzaSyDy-wAc8vbLvpv4sBf60MMweBzaDYTWPaA",
-  //   "AIzaSyArTATX_unM1LvawzEQ5uU0LDqj0nyewo4",
-  //   "AIzaSyDpZBlFJjTo98ts-bOQpiiIeQUzEoYqDIs",
-  //   "AIzaSyCMbntXryqM1_AR-XxDuM4OUP9E8uws844",
-  //   "AIzaSyD2KremXOGRuyOC-VdkeIXRysO2zgh235A",
-  //   "AIzaSyA54kiI-D7cdKQpjWzSCKIYtGq7OZ-QzLA",
-  //   "AIzaSyDpfay9oWW7R6B1UXPZHDU8C5MMCrxTTTA",
-  //   "AIzaSyBjVKr4P1ZSIiuFabIij3783xQshWt4fbA",
-  //   "AIzaSyA6Ui7v5ivkkjOIFQb00gH31c9hdPqnufw",
-  //   "AIzaSyCNVmiFwuyKP7f1InBXngrflHp7-ADLW-M",
-  //   "AIzaSyCXYrPNUdNPHJSGpx6jS4jYcUjU8BVvNhE",
-  //   "AIzaSyDC_a83LliyC9RqBh7rJ9Ct-RSPD9msZ3M",
-  //   "AIzaSyAQUIt_HZ3jm_petnAQB-M5DTc7niuWcqA",
-  //   "AIzaSyBWSKNqFT8Gu7bq0MnoAHUQCAwWWcPLs9o",
-  //   "AIzaSyBkBKw3NkOTA9GgIKYhVAkEB7UFG_IpMWA",
-  //   "AIzaSyBhd-XA1MsSkRN1TdtYR5CmdTVW8p2Svbk"
-  // ];
-
-  private readonly maxLength = 2000;
+  private get apiKeys(): string[] {
+    return this.config.googleApiKeys;
+  }
 
   splitTextIntoChunks(text: string): TextChunk[] {
     console.log(`Texto recebido com ${text.length} caracteres`);
@@ -319,7 +82,7 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
     let chunkIndex = 0;
 
     while (remainingText.length > 0) {
-      if (remainingText.length <= this.maxLength) {
+      if (remainingText.length <= this.config.maxChunkLength) {
         chunks.push({
           text: remainingText,
           chunkIndex,
@@ -329,13 +92,13 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
       }
 
       let cutIndex = -1;
-      const lastPeriodIndex = remainingText.substring(0, this.maxLength).lastIndexOf('.');
+      const lastPeriodIndex = remainingText.substring(0, this.config.maxChunkLength).lastIndexOf('.');
       
       if (lastPeriodIndex !== -1) {
         cutIndex = lastPeriodIndex + 1;
       } else {
-        const lastSpaceIndex = remainingText.substring(0, this.maxLength).lastIndexOf(' ');
-        cutIndex = lastSpaceIndex !== -1 ? lastSpaceIndex : this.maxLength;
+        const lastSpaceIndex = remainingText.substring(0, this.config.maxChunkLength).lastIndexOf(' ');
+        cutIndex = lastSpaceIndex !== -1 ? lastSpaceIndex : this.config.maxChunkLength;
       }
 
       chunks.push({
@@ -379,7 +142,7 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
           speech_config: {
             voice_config: {
               prebuilt_voice_config: {
-                voice_name: "Algenib"
+                voice_name: AUDIO_CONFIG.VOICE_NAME
               }
             }
           }
@@ -458,11 +221,9 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
   }
 
   convertToWav(rawBuffer: Buffer): Buffer {
-    const sampleRate = 24000;
-    const numChannels = 1;
-    const bitsPerSample = 16;
-    const byteRate = sampleRate * numChannels * bitsPerSample / 8;
-    const blockAlign = numChannels * bitsPerSample / 8;
+    const { SAMPLE_RATE, NUM_CHANNELS, BITS_PER_SAMPLE } = AUDIO_CONFIG;
+    const byteRate = SAMPLE_RATE * NUM_CHANNELS * BITS_PER_SAMPLE / 8;
+    const blockAlign = NUM_CHANNELS * BITS_PER_SAMPLE / 8;
     const wavHeaderSize = 44;
     const dataSize = rawBuffer.length;
     const fileSize = wavHeaderSize + dataSize - 8;
@@ -475,11 +236,11 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
     header.write('fmt ', 12);
     header.writeUInt32LE(16, 16);
     header.writeUInt16LE(1, 20);
-    header.writeUInt16LE(numChannels, 22);
-    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt16LE(NUM_CHANNELS, 22);
+    header.writeUInt32LE(SAMPLE_RATE, 24);
     header.writeUInt32LE(byteRate, 28);
     header.writeUInt16LE(blockAlign, 32);
-    header.writeUInt16LE(bitsPerSample, 34);
+    header.writeUInt16LE(BITS_PER_SAMPLE, 34);
     header.write('data', 36);
     header.writeUInt32LE(dataSize, 40);
     
@@ -515,7 +276,7 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
     }
   }
 
-  async processTextToSpeech(text: string, outputDir: string = 'D:\\Canais Dark', filePath?: string): Promise<string[]> {
+  async processTextToSpeech(text: string, outputDir: string = this.config.defaultOutputDir, filePath?: string): Promise<string[]> {
     const totalTimer = new Timer('Processamento completo');
     totalTimer.logStart();
 
@@ -539,7 +300,7 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
     const audioTimer = new Timer('Conversão de áudio');
     audioTimer.logStart();
     
-    const batchSize = 5;
+    const batchSize = BATCH_SIZES.AUDIO_PROCESSING;
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
       totalTimer.log(`Processando bloco ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)...`);
@@ -637,6 +398,9 @@ Para cada chunk, criar cenas de: bailes no Paço Imperial, encontros românticos
         if (ytCode) {
           promptType = this.getPromptTypeByYTCode(ytCode);
           totalTimer.log(`📁 Código detectado: ${ytCode} → Usando prompt tipo ${promptType}`);
+        } else {
+          totalTimer.log(`📁 Código YT não identificado → Usando prompt geral baseado no conteúdo`);
+          promptType = 0; // Usar prompt geral
         }
       }
       
@@ -733,7 +497,7 @@ Seja específico e detalhado para garantir consistência visual.`;
         temperature: 0.3
       }, {
         headers: {
-          'Authorization': `Bearer ${this.openaiApiKey}`,
+          'Authorization': `Bearer ${this.config.openaiApiKey}`,
           'Content-Type': 'application/json'
         }
       });
@@ -746,7 +510,7 @@ Seja específico e detalhado para garantir consistência visual.`;
   }
 
   async generateImagePrompts(chunks: TextChunk[], outputDir: string, promptType: number): Promise<string[]> {
-    const batchSize = 5;
+    const batchSize = BATCH_SIZES.PROMPT_GENERATION;
     const allPrompts: string[] = [];
 
     for (let i = 0; i < chunks.length; i += batchSize) {
@@ -841,7 +605,7 @@ Formato esperado:
       temperature: 0.7
     }, {
       headers: {
-        'Authorization': `Bearer ${this.openaiApiKey}`,
+        'Authorization': `Bearer ${this.config.openaiApiKey}`,
         'Content-Type': 'application/json'
       }
     });
@@ -1008,7 +772,7 @@ PROMPT CORRIGIDO:`;
       temperature: 0.3
     }, {
       headers: {
-        'Authorization': `Bearer ${this.openaiApiKey}`,
+        'Authorization': `Bearer ${this.config.openaiApiKey}`,
         'Content-Type': 'application/json'
       }
     });
@@ -1028,7 +792,7 @@ PROMPT CORRIGIDO:`;
           await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
         }
 
-        const payload = {
+        const payload: WhiskApiPayload = {
           clientContext: {
             workflowId: this.generateUUID(),
             tool: "BACKBONE",
@@ -1070,7 +834,7 @@ PROMPT CORRIGIDO:`;
         });
 
         // Extrair a imagem base64 da resposta
-        const responseData = response.data;
+        const responseData: WhiskApiResponse = response.data;
         
         if (!responseData || !responseData.imagePanels || !responseData.imagePanels[0] || 
             !responseData.imagePanels[0].generatedImages || !responseData.imagePanels[0].generatedImages[0] ||
@@ -1208,7 +972,7 @@ Retorne apenas o prompt da thumbnail, uma única linha.`;
       temperature: 0.7
     }, {
       headers: {
-        'Authorization': `Bearer ${this.openaiApiKey}`,
+        'Authorization': `Bearer ${this.config.openaiApiKey}`,
         'Content-Type': 'application/json'
       }
     });
@@ -1512,8 +1276,8 @@ Linux/Mac:
       const audioFiles = files
         .filter(file => file.startsWith('output_audio_') && file.endsWith('.wav'))
         .sort((a, b) => {
-          const aNum = parseInt(a.match(/output_audio_(\d+)\.wav/)?.[1] || '0');
-          const bNum = parseInt(b.match(/output_audio_(\d+)\.wav/)?.[1] || '0');
+          const aNum = parseInt(a.match(FILE_PATTERNS.AUDIO_FILE)?.[1] || '0');
+          const bNum = parseInt(b.match(FILE_PATTERNS.AUDIO_FILE)?.[1] || '0');
           return aNum - bNum;
         })
         .map(file => path.join(outputDir, file));
@@ -1531,8 +1295,8 @@ Linux/Mac:
       const imageFiles = files
         .filter(file => file.startsWith('imagem_') && file.endsWith('.jpg'))
         .sort((a, b) => {
-          const aNum = parseInt(a.match(/imagem_(\d+)\.jpg/)?.[1] || '0');
-          const bNum = parseInt(b.match(/imagem_(\d+)\.jpg/)?.[1] || '0');
+          const aNum = parseInt(a.match(FILE_PATTERNS.IMAGE_FILE)?.[1] || '0');
+          const bNum = parseInt(b.match(FILE_PATTERNS.IMAGE_FILE)?.[1] || '0');
           return aNum - bNum;
         })
         .map(file => path.join(outputDir, file));

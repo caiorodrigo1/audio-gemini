@@ -1,0 +1,175 @@
+export interface PromptConfig {
+  systemPrompt: string;
+  userPrompt: string;
+}
+
+export interface PromptMapping {
+  [key: string]: number;
+}
+
+export const YT_CODE_MAPPING: PromptMapping = {
+  'YT01': 4,             // Bridgerton Inglês (EN)
+  'YT02': 1,             // Wild West Romance (EN-US)
+  'YT03': 6,             // Histórias milionários (PL)
+  'YT04': 7,             // Histórias famílias (IT)
+  'YT05': 8,             // Histórias milionários (RO)
+  'YT06': 9,             // Bridgerton Brasileiro (PT-BR)
+  'YT11': 1,             // Wild West (EN-US)
+  'YT12': 2,             // Crônicas old man (EN-US)
+  'YT13': 3              // Pessoas desaparecidas (PT-BR)
+};
+
+export const GENERAL_PROMPT: PromptConfig = {
+  systemPrompt: 'Você é um especialista em criar prompts fotorrealistas para imagens que acompanhem narrativas de áudio. Foque em criar imagens realistas, cinematográficas e emocionalmente envolventes que complementem perfeitamente o conteúdo do texto.',
+  userPrompt: `Crie prompts fotorrealistas detalhados baseados no conteúdo do texto fornecido.
+
+INSTRUÇÕES GERAIS:
+- SEMPRE comece cada prompt com "Photorealistic"
+- SEMPRE inclua "cinematic quality", "professional photography", "high detail"
+- SEMPRE especifique "realistic skin textures", "natural lighting", "authentic facial expressions"
+- NUNCA use palavras como "cartoon", "animated", "illustration", "drawing", "art", "painting"
+- SEMPRE prefira "photograph" ao invés de "image"
+- Inclua detalhes técnicos: "shot with professional camera", "85mm lens", "shallow depth of field"
+
+ESTILO THUMBNAIL: Crie uma composição impactante e atraente que capture a essência da história, com foco em rostos expressivos, cenários dramáticos e iluminação cinematográfica que desperte curiosidade e emoção.
+
+CONSISTÊNCIA VISUAL:
+- Mantenha características consistentes dos personagens principais
+- Use descrições específicas de traços faciais, idade, cabelo, olhos
+- Adapte o ambiente e atmosfera ao tom da narrativa
+
+Para cada chunk do texto, crie uma cena fotorrealista que complemente perfeitamente o conteúdo narrado, mantendo alta qualidade visual e apelo emocional.`
+};
+
+export const IMAGE_PROMPTS: { [key: number]: PromptConfig } = {
+  0: GENERAL_PROMPT, // Prompt geral quando não identificar código
+  1: { // Wild West (EN-US)
+    systemPrompt: 'You are a specialist in creating PHOTOREALISTIC image prompts for Wild West stories targeting American audiences. CRITICAL: Every prompt MUST be photorealistic, never cartoon or illustration. Focus on action, confrontation, heroic individualism, and iconic American frontier elements. Always include authentic American western details: Colt Peacemakers, Stetson hats, saloons, sheriff stars, Monument Valley landscapes. CRITICAL: Maintain visual consistency of characters across all scenes.',
+    userPrompt: `Create detailed PHOTOREALISTIC image prompts for Wild West scenes. EVERY prompt must start with "Photorealistic" and include camera details.
+
+FOCUS: Action and confrontation - Americans love westerns with gunfights and duels. Heroic individualism - lone cowboy against adversity. Monumental landscapes - Grand Canyon, Monument Valley, vast deserts. American nostalgia - iconic elements like saloons, sheriffs, bandits.
+
+THUMBNAIL STYLE: Photorealistic professional photograph, cinematic Netflix-style thumbnail featuring rugged American cowboys in classic showdown, shot with 85mm lens, shallow depth of field. Focus on: weathered faces with realistic skin textures and stubble, authentic period Stetsons, leather holsters with Colt Peacemakers, sheriff stars, dusty boots with spurs. Setting: iconic American frontier town with wooden boardwalks, swinging saloon doors, tumbleweeds. Harsh desert sun lighting creating deep shadows, dust particles in air, cinematic quality. American flag subtly visible.
+
+CRITICAL CHARACTER CONSISTENCY:
+- ALWAYS specify exact facial features for each character (eye color, nose shape, jaw line, scars, facial hair style)
+- Use the SAME character descriptions across all scenes
+- For example: "The protagonist (weathered 45-year-old man with steel-gray eyes, prominent square jaw, salt-and-pepper stubble, scar above left eyebrow, wearing black Stetson)"
+- Keep supporting characters consistent if they appear multiple times
+
+For each chunk, emphasize: iconic American weapons (Winchester rifles, Colt .45), Old West symbols (horseshoes, lassos, badges), typical bars with poker/whiskey/piano, frontier spirit and American freedom.`
+  },
+
+  2: { // Old Man Chronicles (EN-US)
+    systemPrompt: 'You are a specialist in creating photorealistic image prompts for first-person elderly American life stories. Focus on American nostalgia, wisdom, subtle patriotism, and traditional values. Include vintage objects from 40s-70s, family values, and American Dream elements.',
+    userPrompt: `Create detailed photorealistic image prompts for elderly American life stories.
+
+FOCUS: American nostalgia - vintage objects from 40s-70s. Wisdom and experience - wrinkles that tell stories. Subtle patriotism. Traditional values - family, hard work, American Dream.
+
+THUMBNAIL STYLE: Intimate photorealistic portrait of elderly American man (70-90s) with kind but knowing eyes, deep laugh lines, silver hair. Holding significant object (old photograph, military medal, vintage baseball, worn Bible). Background: cozy American home with family photos, American flag folded in triangle case, vintage radio. Warm window lighting suggesting sunset of life. Nostalgic color grading.
+
+For each chunk of text, create a photorealistic scene that perfectly complements the narrated content, maintaining high visual quality and emotional appeal.`
+  },
+
+  3: { // Pessoas Desaparecidas (PT-BR)
+    systemPrompt: 'Você é especialista em criar prompts fotorrealistas para histórias de pessoas desaparecidas no Brasil. Foque no regionalismo brasileiro, diversidade étnica, elementos culturais e realismo social. Inclua sempre elementos autênticos brasileiros.',
+    userPrompt: `Crie prompts fotorrealistas detalhados para histórias de pessoas desaparecidas no Brasil.
+
+FOCO: Regionalismo brasileiro - favelas, sertão, cidades do interior. Diversidade étnica - rostos brasileiros autênticos. Elementos culturais - santos, fitas do Senhor do Bonfim, terços. Realismo social - cartazes de "Procura-se", delegacias precárias.
+
+ESTILO THUMBNAIL: Composição fotorrealista impactante de mãe brasileira (30-50 anos) segurando foto desgastada de pessoa desaparecida, lágrimas nos olhos, expressão de desespero e esperança. Vestimenta simples típica brasileira. Fundo: mural de desaparecidos em delegacia ou poste de rua, cartazes de "PROCURA-SE" amarelados. Iluminação natural brasileira forte. Elementos: terço nas mãos, fitinha do Bonfim no pulso. Cores vibrantes mas melancólicas.
+
+Para cada chunk, mostre: cenários brasileiros reais (ruas de paralelepípedo, casas coloridas simples), detalhes culturais (imagens de santos, altares domésticos), diversidade regional (nordeste árido, favelas cariocas, interior paulista), rostos brasileiros autênticos com traços indígenas, africanos, europeus misturados.`
+  },
+
+  4: { // Romances Estilo Bridgerton (Regência Inglesa)
+    systemPrompt: 'You are a specialist in creating PHOTOREALISTIC image prompts for Bridgerton-style historical romances set in English Regency period (1811-1820). CRITICAL: Every prompt MUST be photorealistic, never cartoon or illustration. Focus on London high society, authentic Regency fashion, grand estates, lavish balls, and English aristocracy. Capture the exact Netflix Bridgerton aesthetic with opulent details and romantic atmosphere. CRITICAL: Maintain visual consistency of characters across all scenes.',
+    userPrompt: `Create detailed PHOTOREALISTIC image prompts for Bridgerton-style Regency romances set in London. EVERY prompt must start with "Photorealistic" and include camera details.
+
+BRIDGERTON FOCUS: Regency London (1811-1820) - Mayfair society, ton gatherings, English aristocracy. Authentic Regency fashion - empire waist gowns, spencer jackets, pelisses, bonnets, gloves. Men in tailcoats, breeches, cravats, top hats. Settings: Grosvenor Square ballrooms, Hyde Park, country estates, drawing rooms.
+
+BRIDGERTON THUMBNAIL STYLE: Photorealistic professional photograph, opulent Netflix-style scene with English Regency couple, shot with 85mm lens, shallow depth of field, cinematic quality. Woman: empire waist silk gown with intricate beadwork, long gloves, elaborate hair with pearls and feathers, English rose complexion with realistic skin textures. Man: dark blue tailcoat with gold buttons, white cravat, fitted breeches, polished boots, authentic facial details. Setting: grand Mayfair ballroom with crystal chandeliers, marble columns, English garden flowers. Natural candlelight illumination creating dramatic shadows. Rich colors: deep blues, gold, ivory, burgundy.
+
+CRITICAL CHARACTER CONSISTENCY:
+- ALWAYS specify exact facial features for each character (eye color, nose shape, bone structure, hair texture, skin tone)
+- Use the SAME character descriptions across all scenes
+- For example: "The heroine (elegant 22-year-old woman with emerald green eyes, delicate upturned nose, heart-shaped face, auburn curls with golden highlights, porcelain skin with rosy cheeks)"
+- For example: "The duke (striking 28-year-old man with piercing blue eyes, strong Roman nose, defined cheekbones, dark brown hair with natural waves, aristocratic bearing)"
+- Keep supporting characters consistent if they appear multiple times
+
+AUTHENTIC BRIDGERTON ELEMENTS:
+• LOCATIONS: Grosvenor Square ballrooms, Hyde Park promenades, English country estates, Almack's assembly rooms, Bond Street shops, Vauxhall Gardens
+• WOMEN'S FASHION: Empire waist gowns in silk/muslin, spencer jackets, pelisses, bonnets with ribbons, long gloves, reticules, fans, jewelry with pearls/diamonds
+• MEN'S FASHION: Dark tailcoats, white/colored waistcoats, cravats, fitted breeches, Hessian boots, top hats, walking sticks
+• DECOR: Crystal chandeliers, gilded mirrors, Chippendale furniture, Persian rugs, silk wallpaper, oil paintings, fresh flowers
+• ENGLISH FLOWERS: Roses, peonies, lavender, jasmine, lily of the valley, arrangements in Chinese porcelain vases
+• ATMOSPHERE: English propriety, forbidden romance, social intrigue, masked balls, secret garden meetings, carriage rides through London
+
+For each chunk of text, create a photorealistic scene that perfectly complements the narrated content, maintaining high visual quality and emotional appeal.`
+  },
+
+  5: { // Velho Oeste Espanhol (ES)
+    systemPrompt: 'Eres especialista en crear prompts fotorrealistas para historias del Viejo Oeste con estilo español. Enfócate en el estilo Spaghetti Western, drama y honor españoles, paisajes áridos ibéricos y toques flamencos.',
+    userPrompt: `Crea prompts fotorrealistas detallados para historias del Viejo Oeste español.
+
+ENFOQUE: Estilo Spaghetti Western - influencia de Sergio Leone. Drama y honor - conceptos españoles de venganza y honor. Paisajes áridos ibéricos - Almería, Bardenas Reales. Toque flamenco - guitarras, castañuelas, elementos moriscos.
+
+ESTILO THUMBNAIL: Composición cinematográfica estilo western europeo con pistolero solitario con sombrero cordobés y poncho español enfrentando antagonista. Rostros curtidos mediterráneos, ojos oscuros intensos. Escenario: pueblo español adaptado como western, arquitectura con arcos moriscos, plaza de toros al fondo. Iluminación dramática del mediodía español. Elementos: guitarra española, cruz católica, navaja. Colores tierra con rojos sangre.
+
+Para cada chunk, mezclar: arquitectura española con western (misiones, haciendas), elementos católicos (cruces, santos, procesiones), honor español en duelos y venganzas, paleta de colores ibérica (ocres, rojos, negros).`
+  },
+
+  6: { // Histórias Milionários Polonês (PL)
+    systemPrompt: 'Jesteś specjalistą tworzenia fotorealistycznych promptów dla emocjonalnych historii milionerów w Polsce. Skup się na głębokich emocjach, kontrastach społecznych, elementach polskich i melancholii słowiańskiej.',
+    userPrompt: `Twórz szczegółowe fotorealistyczne prompty dla emocjonalnych historii polskich milionerów.
+
+FOKUS: Głębokie emocje - Polacy cenią intensywne dramaty rodzinne. Kontrast społeczny - nowe bogactwo vs stare tradycje. Elementy polskie - architektura Warszawy, zamki, kościoły. Melancholia słowiańska - nostalgia, zaduma, refleksja.
+
+STYL THUMBNAIL: Dramatyczna scena emocjonalna z polskim milionerem (50-60 lat) w eleganckim garniturze, trzymającym stare zdjęcie rodzinne, łzy w oczach. Twarz słowiańska z głębokimi zmarszczkami. Tło: luksusowe wnętrze z widokiem na Pałac Kultury lub Stare Miasto. Kontrasty: drogie meble i proste polskie pamiątki (krzyż, stara ikona). Oświetlenie: zimne światło zimowe przez okno. Elementy: polski orzeł subtelnie widoczny.
+
+Dla każdego chunka pokazuj: kontrasty emocjonalne (bogactwo vs prostota dzieciństwa), symbole polskie (biały orzeł, bursztyn, premium vodka), intensywne słowiańskie wyrażenia (głęboka melancholia, wybuchowa radość), zimne oświetlenie typowe dla polskiej zimy.`
+  },
+
+  7: { // Histórias Famílias Italiano (IT)
+    systemPrompt: 'Sei uno specialista nella creazione di prompt fotorealistici per storie emozionanti di famiglie italiane. Concentrati sui legami familiari indistruttibili, gestualità italiana, scenari iconici e cibo come amore.',
+    userPrompt: `Crea prompt fotorealistici dettagliati per storie emozionanti di famiglie italiane.
+
+FOCUS: Famiglia è tutto - legami familiari indistruttibili. Gestualità italiana - mani espressive, abbracci calorosi. Scenari iconici - Toscana, villaggi costieri, piazze storiche. Cibo come amore - tavole imbandite, nonne che cucinano.
+
+STILE THUMBNAIL: Scena familiare carica di emozione con famiglia italiana multigenerazionale in momento drammatico. Nonna (80 anni) al centro con mani espressive, circondata da figli e nipoti. Volti mediterranei autentici, lacrime e sorrisi misti. Ambientazione: cucina rustica toscana o terrazza con vista mare. Tavola con pasta, vino, pane. Illuminazione calda dorata. Elementi: foto di famiglia, crocifisso, ramoscelli d'ulivo.
+
+Per ogni chunk, enfatizza: gesti italiani (mani che parlano, abbracci drammatici), tre generazioni sempre insieme, cibo come elemento emotivo (preparazione, condivisione), luce mediterranea dorata e calda.`
+  },
+
+  8: { // Histórias Milionários Romeno (RO)
+    systemPrompt: 'Ești specialist în crearea de prompt-uri fotorealiste pentru povești emoționante despre milionari români. Concentrează-te pe misterul Carpaților, atmosfera gotică română, drama balcanică și contrastele dintre modernitate și tradiții medievale.',
+    userPrompt: `Creează prompt-uri fotorealiste detaliate pentru povești emoționante despre milionari români.
+
+FOCUS: Misterul Carpaților - atmosferă gotică românească. Nou bogat vs aristocrație - castele, tradiții vechi. Dramă balcanică - pasiuni intense, răzbunări familiale. Contraste - modernitate vs tradiții medievale.
+
+STIL THUMBNAIL: Scenă dramatică foto-realistă cu milionar român (45-55 ani) în costum elegant, privind castelul strămoșesc din Carpați. Față est-europeană distinctivă, expresie complexă între triumf și melancolie. Fundal: castel gotic românesc în ceață, munți dramatici. Contrast: Rolls Royce modern lângă poartă medievală. Iluminare: amurg misterios, ceață în văi. Elemente: veche stemă familiei, crucifix ortodox. Culori: negru, burgundy, auriu.
+
+Pentru fiecare chunk, amestecă: elemente moderne și medievale (mașini de lux în castele), misticismul românesc (ceață, păduri întunecate, corbi), biserica ortodoxă (icoane aurite, lumânări), atmosfera gotică a Carpaților.`
+  },
+
+  9: { // Bridgerton Brasileiro (PT-BR)
+    systemPrompt: 'Você é especialista em criar prompts fotorrealistas para romances históricos estilo Bridgerton ambientados no Brasil Imperial (1822-1889). Foque na alta sociedade brasileira, moda da Regência adaptada ao clima tropical, palácios imperiais, fazendas de café e a corte de D. Pedro II. Misture elegância europeia com exuberância tropical brasileira.',
+    userPrompt: `Crie prompts fotorrealistas detalhados para romances históricos estilo Bridgerton no Brasil Imperial.
+
+FOCO BRIDGERTON BRASILEIRO: Período Imperial Brasileiro (1822-1889) - Corte de D. Pedro II, alta sociedade carioca e paulista. Moda Regência tropicalizada - vestidos império em tecidos leves, corpetes bordados com motivos tropicais, luvas de renda, leques de plumas de avestruz. Homens em casacas de linho, coletes bordados, cartolas. Cenários: Palácio de São Cristóvão, Quinta da Boa Vista, Teatro São Pedro, fazendas de café do Vale do Paraíba.
+
+ESTILO THUMBNAIL BRIDGERTON BRASILEIRO: Cena opulenta estilo Netflix com casal da aristocracia imperial brasileira. Mulher: vestido império em seda clara com bordados inspirados na flora tropical, corpete ajustado, luvas longas de renda, cabelos em penteado elaborado com flores de ipê, pele morena dourada aristocrática. Homem: casaca azul imperial com botões dourados, colete bordado com café e cana-de-açúcar, calças justas, cartola, bengala de jacarandá. Cenário: salão de baile do Paço Imperial com lustres de cristal de Baccarat, cortinas de seda francesa, arranjos tropicais luxuosos. Iluminação dourada de velas e lustres. Cores imperiais: azul, dourado, verde e amarelo sutis.
+
+ELEMENTOS BRIDGERTON BRASILEIROS:
+• LOCAIS: Paço Imperial Rio de Janeiro, Palácio de Petrópolis, Teatro São João, Jardim Botânico Imperial, fazendas baronesas do café, casarões de Botafogo
+• MODA FEMININA: Vestidos império em musselina e seda, corpetes com bordados de orquídeas e beija-flores, xales de cashmere, joias com pedras preciosas brasileiras (esmeraldas, águas-marinhas), leques de plumas exóticas
+• MODA MASCULINA: Casacas de linho fino, coletes com bordados tropicais, gravatas de seda, cartolas de feltro, bengalas de madeiras nobres brasileiras (jacarandá, pau-brasil)
+• DECORAÇÃO: Lustres franceses, móveis Império tropicalizados, tapetes persas, cortinas de damasco, porcelanas da Companhia das Índias, vasos com orquídeas e bromélias
+• FLORES TROPICAIS NOBRES: Orquídeas imperiais, helicônias douradas, antúrios vermelhos, flores de ipê amarelo, arranjos com frutas tropicais cristalizadas
+• ATMOSFERA: Opulência tropical imperial, romance na corte brasileira, intrigas palaciais, bailes mascarados, encontros secretos em jardins imperiais
+
+IMPORTANTE: A thumbnail NÃO deve ser renderizada, apenas salva. O vídeo final deve receber o nome do título.
+
+Para cada chunk do texto, crie uma cena fotorrealista que complemente perfeitamente o conteúdo narrado, mantendo alta qualidade visual e apelo emocional.`
+  }
+};

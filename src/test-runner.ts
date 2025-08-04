@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { TTSService } from './tts.service';
+import { TTSService } from './services/tts.service';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
