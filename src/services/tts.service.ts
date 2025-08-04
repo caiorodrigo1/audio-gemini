@@ -458,7 +458,20 @@ export class TTSService {
         
         if (ytCode) {
           promptType = this.getPromptTypeByYTCode(ytCode);
-          totalTimer.log(`📁 Código detectado: ${ytCode} → Usando prompt tipo ${promptType}`);
+          const promptNames = {
+            0: 'Geral',
+            1: 'Wild West (EN-US)', 
+            2: 'Old Man Chronicles (EN-US)',
+            3: 'Pessoas Desaparecidas (PT-BR)',
+            4: 'Bridgerton Inglês (EN)',
+            5: 'Velho Oeste Espanhol (ES)',
+            6: 'Milionários Polonês (PL)',
+            7: 'Famílias Italiano (IT)',
+            8: 'Milionários Romeno (RO)',
+            9: 'Bridgerton Brasileiro (PT-BR)',
+            10: 'Santos Católicos (IT)'
+          };
+          totalTimer.log(`📁 Código detectado: ${ytCode} → ${promptNames[promptType] || `Prompt tipo ${promptType}`}`);
         } else {
           totalTimer.log(`📁 Código YT não identificado → Usando prompt geral baseado no conteúdo`);
           promptType = 0; // Usar prompt geral
@@ -608,6 +621,23 @@ Seja específico e detalhado para garantir consistência visual.`;
     ).join('\n');
 
     const specializedPrompt = this.getSpecializedPrompt(promptType);
+    
+    // Log do prompt sendo usado
+    const promptNames = {
+      0: 'Geral',
+      1: 'Wild West (EN-US)', 
+      2: 'Old Man Chronicles (EN-US)',
+      3: 'Pessoas Desaparecidas (PT-BR)',
+      4: 'Bridgerton Inglês (EN)',
+      5: 'Velho Oeste Espanhol (ES)',
+      6: 'Milionários Polonês (PL)',
+      7: 'Famílias Italiano (IT)',
+      8: 'Milionários Romeno (RO)',
+      9: 'Bridgerton Brasileiro (PT-BR)',
+      10: 'Santos Católicos (IT)'
+    };
+    
+    console.log(`🎨 Usando prompt especializado: ${promptNames[promptType] || `Tipo ${promptType}`}`);
     
     // Primeiro, analisar o texto para identificar personagens
     const characterAnalysis = await this.analyzeCharacters(chunksText, promptType);
