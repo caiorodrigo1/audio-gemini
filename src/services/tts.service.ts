@@ -36,7 +36,7 @@ export class TTSService {
       // Substituir o token antigo pelo novo
       const updatedContent = fileContent.replace(
         /private whiskToken = "[^"]*";/,
-        `private whiskToken = "${newToken}";`
+        `private whiskToken = "ya29.a0AS3H6NyR5uSyjnZFj7M4G_TLWbKGUgDZErQryBUrzeLpjWRXYXqm5k9TXcoCm0QBibtaRVR-AnKE72WAx1gFf8z5Nl2yNjAbONIeB3qiTHGE0VeXVsYzhi2YllkayvSALN3mgwRAesR8jv4qngIEPxMVbCKQXUxwaR6inWs1u1DDJaqrFBLC_pjZhNkHF980tT-hWOIZHBM7hQHeoFugZX6hYnBZDpRnrB4cQa_29NSSBW0zNklSDLqqFkka4iJIejMwRXfBqfpGYlxpgSRphd3WdpdqAtvijc1TFQe3likiyK9pvsQwak8MXu0hG_gWiGd5CDnfWh3iaCgYKAUASARISFQHGX2MiTXFGAiZU3O02lrhT7XgeOw0339";`
       );
       
       await fs.writeFile(filePath, updatedContent, 'utf-8');
@@ -83,12 +83,13 @@ export class TTSService {
 
     while (remainingText.length > 0) {
       if (remainingText.length <= this.config.maxChunkLength) {
+        const keyIndex = chunkIndex % this.apiKeys.length;
         chunks.push({
           text: remainingText,
           chunkIndex,
-          apiKey: this.apiKeys[chunkIndex % this.apiKeys.length]
+          apiKey: this.apiKeys[keyIndex]
         });
-        break;
+          break;
       }
 
       let cutIndex = -1;
@@ -101,10 +102,11 @@ export class TTSService {
         cutIndex = lastSpaceIndex !== -1 ? lastSpaceIndex : this.config.maxChunkLength;
       }
 
+      const keyIndex = chunkIndex % this.apiKeys.length;
       chunks.push({
         text: remainingText.substring(0, cutIndex).trim(),
         chunkIndex,
-        apiKey: this.apiKeys[chunkIndex % this.apiKeys.length]
+        apiKey: this.apiKeys[keyIndex]
       });
 
       remainingText = remainingText.substring(cutIndex).trim();
@@ -115,13 +117,22 @@ export class TTSService {
   }
 
   async convertToSpeech(chunk: TextChunk): Promise<Buffer> {
-    const maxRetries = 3;
+    const maxRetries = Math.min(3, this.apiKeys.length);
     let lastError: any;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      // Escolher uma API key diferente a cada tentativa
-      const apiKeyIndex = (this.apiKeys.indexOf(chunk.apiKey) + attempt) % this.apiKeys.length;
+      // Rotação sequencial: chunk usa sua API key designada, tentativas usam keys seguintes
+      const totalKeys = this.apiKeys.length;
+      const baseKeyIndex = chunk.chunkIndex % totalKeys;  // API key base do chunk
+      const apiKeyIndex = (baseKeyIndex + attempt) % totalKeys;  // Rotaciona nas tentativas
       const currentApiKey = this.apiKeys[apiKeyIndex];
+      
+      if (attempt === 0) {
+        console.log(`📝 Chunk ${chunk.chunkIndex + 1} usando API key ${apiKeyIndex + 1}/${totalKeys} (${currentApiKey.substring(0, 15)}...)`);
+      } else {
+        console.log(`🔄 Tentativa ${attempt + 1} para chunk ${chunk.chunkIndex + 1} com API key ${apiKeyIndex + 1}/${totalKeys} (${currentApiKey.substring(0, 15)}...)`);
+      }
+      
       
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:streamGenerateContent?key=${currentApiKey}`;
       
@@ -151,9 +162,8 @@ export class TTSService {
 
       try {
         if (attempt > 0) {
-          console.log(`Tentativa ${attempt + 1} para chunk ${chunk.chunkIndex + 1} com API key ${apiKeyIndex + 1}...`);
           // Delay adicional nas tentativas subsequentes
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
         }
 
         const response = await axios.post(url, payload, {
@@ -180,7 +190,9 @@ export class TTSService {
 
         const audioData = responseData.candidates[0].content.parts[0].inlineData.data;
         if (attempt > 0) {
-          console.log(`✅ Chunk ${chunk.chunkIndex + 1} convertido com sucesso na tentativa ${attempt + 1}!`);
+          console.log(`✅ Chunk ${chunk.chunkIndex + 1} convertido com sucesso na tentativa ${attempt + 1} (API key ${apiKeyIndex + 1})!`);
+        } else {
+          console.log(`✅ Chunk ${chunk.chunkIndex + 1} convertido com sucesso (API key ${apiKeyIndex + 1})!`);
         }
         return Buffer.from(audioData, 'base64');
         
@@ -189,7 +201,7 @@ export class TTSService {
         const isRateLimit = error.response?.status === 429;
         const isQuotaError = error.response?.data?.[0]?.error?.code === 429;
         
-        console.error(`❌ Tentativa ${attempt + 1} falhou para chunk ${chunk.chunkIndex + 1}:`, error.message);
+        console.error(`❌ Tentativa ${attempt + 1} falhou para chunk ${chunk.chunkIndex + 1} (API key ${apiKeyIndex + 1}):`, error.message);
         
         // Debug adicional para entender o erro
         if (error.response) {
@@ -198,9 +210,17 @@ export class TTSService {
         }
         
         if (isRateLimit || isQuotaError) {
-          console.log(`🔄 Rate limit/quota excedida, tentando com próxima API key...`);
+          console.log(`🔄 Rate limit/quota excedida (API key ${apiKeyIndex + 1}), tentando com próxima API key...`);
           if (attempt < maxRetries - 1) {
-            continue; // Tentar próxima API key
+            // Aguardar mais tempo em caso de quota diária esgotada
+            const isDaily = error.response?.data?.[0]?.error?.details?.some(
+              detail => detail.violations?.[0]?.quotaId?.includes('PerDay')
+            );
+            if (isDaily) {
+              console.log(`⏳ Quota diária detectada, aguardando 5s antes da próxima API key...`);
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+            continue;
           }
         } else {
           // Para outros erros, tentar uma vez mais com API key diferente
@@ -276,6 +296,28 @@ export class TTSService {
     }
   }
 
+  playErrorSound(): void {
+    try {
+      // Para Windows - som de erro mais alto e repetido
+      if (process.platform === 'win32') {
+        const { exec } = require('child_process');
+        // Toca som de erro 3 vezes
+        exec('powershell -c "for($i=1; $i -le 3; $i++) { [System.Media.SystemSounds]::Hand.Play(); Start-Sleep -Milliseconds 500 }"', (error) => {
+          if (error) {
+            console.log('🚨 Som de erro tocado!');
+          }
+        });
+      } else {
+        // Para sistemas Unix - beep repetido
+        const { exec } = require('child_process');
+        exec('for i in {1..3}; do echo -e "\\a"; sleep 0.5; done', () => {});
+      }
+    } catch (error) {
+      // Fallback: tentar som simples
+      this.playNotificationSound();
+    }
+  }
+
   async processTextToSpeech(text: string, outputDir: string = this.config.defaultOutputDir, filePath?: string): Promise<string[]> {
     const totalTimer = new Timer('Processamento completo');
     totalTimer.logStart();
@@ -295,12 +337,14 @@ export class TTSService {
     const savedFiles: string[] = [];
 
     totalTimer.log(`Processando ${chunks.length} chunks de texto...`);
+    console.log(`🔑 API keys carregadas: ${this.apiKeys.length}`);
 
-    // Processamento em blocos de 5 chunks para melhor performance
+    // Processamento em blocos menores para evitar quota limits
     const audioTimer = new Timer('Conversão de áudio');
     audioTimer.logStart();
     
-    const batchSize = BATCH_SIZES.AUDIO_PROCESSING;
+    // Reduzir batch size para free tier do Gemini (3 requests/minuto)
+    const batchSize = Math.min(BATCH_SIZES.AUDIO_PROCESSING, 2);
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
       totalTimer.log(`Processando bloco ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)...`);
@@ -365,10 +409,27 @@ export class TTSService {
         }
       }
       
-      // Delay entre blocos para evitar rate limiting
+      // Verificar se muitos chunks falharam consecutivamente (indicativo de problema geral)
+      const currentBatchFailed = batchResults.every(result => result.status === 'rejected');
+      if (currentBatchFailed && batch.length > 1) {
+        console.log(`🚨 ALERTA: Todos os chunks do bloco ${Math.floor(i / batchSize) + 1} falharam!`);
+        console.log(`🔍 Possível problema: API keys esgotadas ou erro de conectividade`);
+        
+        // Se for o primeiro bloco e todos falharam, parar execução
+        if (i === 0) {
+          console.log(`❌ EXECUÇÃO INTERROMPIDA: Todos os chunks do primeiro bloco falharam`);
+          console.log(`💡 Verifique as API keys ou tente novamente mais tarde`);
+          this.playErrorSound();
+          audioTimer.logEnd();
+          totalTimer.logEnd();
+          throw new Error('Execução interrompida: falha crítica na geração de áudio');
+        }
+      }
+      
+      // Delay maior entre blocos para evitar rate limiting (free tier: 3 requests/minuto)
       if (i + batchSize < chunks.length) {
-        audioTimer.log('Aguardando antes do próximo bloco...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        audioTimer.log('Aguardando 30s antes do próximo bloco (free tier limits)...');
+        await new Promise(resolve => setTimeout(resolve, 30000)); // 30 segundos
       }
     }
     
@@ -860,10 +921,15 @@ PROMPT CORRIGIDO:`;
         console.error(`❌ Tentativa ${attempt + 1}/${maxRetries} falhou:`, error.message);
         
         if (isUnauthorized) {
-          console.log(`🔑 Erro de autenticação detectado (401)`);
+          console.log(`🔑 Erro de autenticação detectado (401) - Token Whisk expirado!`);
+          console.log(`🚨 INTERRUPÇÃO: Token do Whisk precisa ser renovado`);
+          
+          // Tocar som de alerta
+          this.playErrorSound();
           
           if (this.consoleService && typeof this.consoleService.promptForNewToken === 'function') {
             try {
+              console.log(`🔔 Aguardando novo token...`);
               const newToken = await this.consoleService.promptForNewToken();
               if (newToken && newToken.length > 10) {
                 await this.updateWhiskToken(newToken);
@@ -871,14 +937,17 @@ PROMPT CORRIGIDO:`;
                 continue; // Tentar novamente com novo token
               } else {
                 console.log(`❌ Token inválido fornecido`);
+                this.playErrorSound();
                 break;
               }
             } catch (tokenError) {
               console.error(`❌ Erro ao obter novo token:`, tokenError.message);
+              this.playErrorSound();
               break;
             }
           } else {
             console.log(`❌ Console service não disponível para solicitar novo token`);
+            this.playErrorSound();
             break;
           }
         } else if (isRateLimit || isServerError) {
