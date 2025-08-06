@@ -343,8 +343,8 @@ export class TTSService {
     const audioTimer = new Timer('Conversão de áudio');
     audioTimer.logStart();
     
-    // Reduzir batch size para free tier do Gemini (3 requests/minuto)
-    const batchSize = Math.min(BATCH_SIZES.AUDIO_PROCESSING, 2);
+    // Processar 5 chunks por vez
+    const batchSize = BATCH_SIZES.AUDIO_PROCESSING;
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
       totalTimer.log(`Processando bloco ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)...`);
