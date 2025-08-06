@@ -19,6 +19,9 @@ export class TTSService {
   constructor() {
     this.config = loadEnvConfig();
     this.whiskToken = this.config.whiskToken;
+    
+    // Garantir que sempre temos o token mais recente
+    this.reloadWhiskTokenFromEnv();
   }
 
   setConsoleService(consoleService: any) {
@@ -28,23 +31,37 @@ export class TTSService {
   async updateWhiskToken(newToken: string) {
     this.whiskToken = newToken;
     
-    // Salvar o novo token no arquivo permanentemente
+    // Salvar o novo token no arquivo .env permanentemente
     try {
-      const filePath = __filename; // Caminho deste arquivo
-      const fileContent = await fs.readFile(filePath, 'utf-8');
+      const envPath = path.join(process.cwd(), '.env');
+      const envContent = await fs.readFile(envPath, 'utf-8');
       
-      // Substituir o token antigo pelo novo
-      const updatedContent = fileContent.replace(
-        /private whiskToken = "[^"]*";/,
-        `private whiskToken = "ya29.a0AS3H6NyR5uSyjnZFj7M4G_TLWbKGUgDZErQryBUrzeLpjWRXYXqm5k9TXcoCm0QBibtaRVR-AnKE72WAx1gFf8z5Nl2yNjAbONIeB3qiTHGE0VeXVsYzhi2YllkayvSALN3mgwRAesR8jv4qngIEPxMVbCKQXUxwaR6inWs1u1DDJaqrFBLC_pjZhNkHF980tT-hWOIZHBM7hQHeoFugZX6hYnBZDpRnrB4cQa_29NSSBW0zNklSDLqqFkka4iJIejMwRXfBqfpGYlxpgSRphd3WdpdqAtvijc1TFQe3likiyK9pvsQwak8MXu0hG_gWiGd5CDnfWh3iaCgYKAUASARISFQHGX2MiTXFGAiZU3O02lrhT7XgeOw0339";`
+      // Substituir o token antigo pelo novo no .env
+      const updatedContent = envContent.replace(
+        /WHISK_TOKEN=.*/,
+        `WHISK_TOKEN=${newToken}`
       );
       
-      await fs.writeFile(filePath, updatedContent, 'utf-8');
-      console.log('✅ Token atualizado e salvo permanentemente no código!');
+      await fs.writeFile(envPath, updatedContent, 'utf-8');
+      
+      // Também atualizar a variável de ambiente na sessão atual
+      process.env.WHISK_TOKEN = newToken;
+      
+      console.log('✅ Token Whisk atualizado e salvo permanentemente no .env!');
+      console.log('✅ Variável de ambiente da sessão atual também atualizada!');
       
     } catch (error) {
-      console.warn('⚠️ Token atualizado na memória, mas não foi possível salvar no arquivo:', error.message);
+      console.warn('⚠️ Token atualizado na memória, mas não foi possível salvar no .env:', error.message);
       console.log('✅ Token funcionando na sessão atual!');
+    }
+  }
+
+  reloadWhiskTokenFromEnv(): void {
+    // Recarregar token do .env caso tenha sido atualizado externamente
+    const envToken = process.env.WHISK_TOKEN;
+    if (envToken && envToken !== this.whiskToken) {
+      this.whiskToken = envToken;
+      console.log('🔄 Token Whisk recarregado do .env');
     }
   }
 
@@ -67,6 +84,23 @@ export class TTSService {
 
   getSpecializedPrompt(promptType: number): PromptConfig {
     return IMAGE_PROMPTS[promptType] || GENERAL_PROMPT;
+  }
+
+  getPromptStyleName(promptType: number): string {
+    const promptNames = {
+      0: 'Geral',
+      1: 'Wild West (EN-US)', 
+      2: 'Old Man Chronicles (EN-US)',
+      3: 'Pessoas Desaparecidas (PT-BR)',
+      4: 'Bridgerton Inglês (EN)',
+      5: 'Velho Oeste Espanhol (ES)',
+      6: 'Milionários Polonês (PL)',
+      7: 'Famílias Italiano (IT)',
+      8: 'Milionários Romeno (RO)',
+      9: 'Bridgerton Brasileiro (PT-BR)',
+      10: 'Jornada dos Santos - Humano até Santificação (IT)'
+    };
+    return promptNames[promptType] || `Tipo ${promptType}`;
   }
   
   private get apiKeys(): string[] {
@@ -1046,29 +1080,54 @@ PROMPT CORRIGIDO:`;
   async generateThumbnailPrompt(cleanTitle: string, promptType: number): Promise<string> {
     const specializedPrompt = this.getSpecializedPrompt(promptType);
     
-    const prompt = `${specializedPrompt.userPrompt}
+    const prompt = `TÍTULO DA HISTÓRIA: "${cleanTitle}"
+ESTILO: ${this.getPromptStyleName(promptType)}
 
-TÍTULO DA HISTÓRIA: "${cleanTitle}"
+Analise este título e crie um prompt de THUMBNAIL CHAMATIVA focado em ALTA CTR (Click-Through Rate).
 
-Crie um prompt de THUMBNAIL de alto CTR baseado neste título. 
-A thumbnail deve ser atraente, dramática e representar perfeitamente o tema "${cleanTitle}".
-Use o estilo especializado definido acima, mas focado especificamente neste título.
-Retorne apenas o prompt da thumbnail, uma única linha.`;
+ELEMENTOS OBRIGATÓRIOS PARA ALTA CTR:
+- ROSTO EXPRESSIVO em primeiro plano (emoção intensa: medo, choque, tristeza, raiva)
+- AÇÃO ou TENSÃO visual clara
+- CONTRASTE de cores forte (cores complementares)
+- ELEMENTO DE MISTÉRIO ou suspense
+- COMPOSIÇÃO que guie o olhar para o centro
+- ILUMINAÇÃO dramática (luz vs sombra)
+
+INSTRUÇÕES ESPECÍFICAS:
+1. Identifique o TEMA PRINCIPAL do título "${cleanTitle}"
+2. Crie uma cena que represente o MOMENTO MAIS DRAMÁTICO da história
+3. Foque em UM PERSONAGEM PRINCIPAL com expressão facial INTENSA
+4. Adicione elementos visuais que criem CURIOSIDADE sobre o que aconteceu
+5. Use cores que se destaquem no feed (evite tons apagados)
+
+FORMATO OBRIGATÓRIO:
+- Comece com "Photorealistic thumbnail shot"
+- Inclua detalhes técnicos: "professional camera, 85mm lens, cinematic lighting"
+- Especifique expressão facial detalhada e emoção
+- Descreva cenário de forma que gere curiosidade
+
+PROIBIDO:
+- Thumbnails genéricas ou sem emoção
+- Rostos pequenos ou distantes
+- Cenários sem foco central
+- Cores apagadas ou monocromáticas
+
+Retorne APENAS o prompt da thumbnail, uma linha completa e detalhada.`;
 
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: specializedPrompt.systemPrompt
+          content: `Você é um especialista em criar thumbnails de alta performance para YouTube. Sua especialidade é transformar títulos em prompts que geram imagens chamativas que maximizam CTR. Foque sempre em: rosto expressivo em primeiro plano, emoção intensa, contraste visual, elementos de curiosidade e mistério.`
         },
         {
           role: 'user',
           content: prompt
         }
       ],
-      max_tokens: 300,
-      temperature: 0.7
+      max_tokens: 400,
+      temperature: 0.8
     }, {
       headers: {
         'Authorization': `Bearer ${this.config.openaiApiKey}`,
