@@ -79,7 +79,7 @@ export class TTSService {
   }
 
   getPromptTypeByYTCode(ytCode: string): number {
-    return YT_CODE_MAPPING[ytCode] || 4; // Default para prompt 4
+    return YT_CODE_MAPPING[ytCode] || 0; // Default para prompt 0 (Geral)
   }
 
   getSpecializedPrompt(promptType: number): PromptConfig {
@@ -482,7 +482,7 @@ export class TTSService {
     // Gerar prompts de imagem após conversão de áudio
     try {
       // Detectar código YT e determinar tipo de prompt primeiro
-      let promptType = 4; // Default
+      let promptType = 0; // Default para prompt geral
       let cleanTitle = '';
       
       if (filePath) {
@@ -649,7 +649,7 @@ Seja específico e detalhado para garantir consistência visual.`;
     return allPrompts;
   }
 
-  async callChatGPT(chunks: TextChunk[], promptType: number = 4, outputDir?: string): Promise<string[]> {
+  async callChatGPT(chunks: TextChunk[], promptType: number = 0, outputDir?: string): Promise<string[]> {
     const chunksText = chunks.map((chunk, index) => 
       `=== CHUNK ${chunk.chunkIndex + 1} ===\n${chunk.text}\n`
     ).join('\n');
