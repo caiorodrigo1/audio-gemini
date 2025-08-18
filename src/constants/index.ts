@@ -7,6 +7,7 @@ export const AUDIO_CONFIG = {
 
 export const BATCH_SIZES = {
   AUDIO_PROCESSING: 5,
+  AUDIO_PROCESSING_FISH: 5, // Fish Audio suporta 5 requests simultâneas (tier básico)
   PROMPT_GENERATION: 5
 } as const;
 

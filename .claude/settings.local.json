@@ -14,7 +14,9 @@
       "Bash(rm:*)",
       "Bash(ffmpeg:*)",
       "Bash(move:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.fish.audio)"
     ],
     "deny": []
   }

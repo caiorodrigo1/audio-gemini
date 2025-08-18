@@ -8,6 +8,7 @@ import { Timer } from '../utils/timer.util';
 import { TextChunk } from '../interfaces/text-chunk.interface';
 import { WhiskApiResponse, WhiskApiPayload } from '../interfaces/whisk-response.interface';
 import { WhiskAuthService } from './whisk-auth.service';
+import { FishAudioService } from './fish-audio.service';
 import { AUDIO_CONFIG, BATCH_SIZES, TIMEOUTS, FILE_PATTERNS } from '../constants';
 
 
@@ -16,8 +17,12 @@ export class TTSService {
   private readonly config: EnvConfig;
   private whiskToken: string;
   private consoleService: any;
+  private useFishAudio: boolean = false;
 
-  constructor(private readonly whiskAuthService: WhiskAuthService) {
+  constructor(
+    private readonly whiskAuthService: WhiskAuthService,
+    private readonly fishAudioService: FishAudioService
+  ) {
     this.config = loadEnvConfig();
     this.whiskToken = this.config.whiskToken;
     
@@ -27,6 +32,27 @@ export class TTSService {
 
   setConsoleService(consoleService: any) {
     this.consoleService = consoleService;
+  }
+
+  setUseFishAudio(useFishAudio: boolean) {
+    this.useFishAudio = useFishAudio;
+    console.log(`🔧 Modo de áudio configurado: ${useFishAudio ? 'Fish Audio' : 'Google Gemini'}`);
+    
+    if (useFishAudio) {
+      // Validar configuração do Fish Audio
+      const validation = this.fishAudioService.validateConfiguration();
+      if (!validation.isValid) {
+        console.error('❌ Configuração do Fish Audio inválida:');
+        validation.errors.forEach(error => console.error(`   • ${error}`));
+        console.log('\n💡 Para configurar o Fish Audio:');
+        console.log('   1. Crie uma conta em https://fish.audio/');
+        console.log('   2. Obtenha sua API key');
+        console.log('   3. Configure no arquivo .env:');
+        console.log('      FISH_AUDIO_API_KEY=sua_api_key');
+        console.log('      FISH_AUDIO_REFERENCE_ID=seu_reference_id');
+        throw new Error('Configuração do Fish Audio inválida');
+      }
+    }
   }
 
   async updateWhiskToken(newToken: string) {
@@ -179,6 +205,12 @@ export class TTSService {
   }
 
   async convertToSpeech(chunk: TextChunk): Promise<Buffer> {
+    // Se estiver usando Fish Audio, delegar para o FishAudioService
+    if (this.useFishAudio) {
+      return await this.fishAudioService.convertToSpeech(chunk);
+    }
+    
+    // Caso contrário, usar a lógica original do Google Gemini
     const maxRetries = 5;
     let lastError: any;
     
@@ -341,6 +373,12 @@ export class TTSService {
   }
 
   async saveAudioFile(wavBuffer: Buffer, chunkIndex: number, outputDir: string): Promise<string> {
+    // Se estiver usando Fish Audio, delegar para o FishAudioService (que já retorna WAV)
+    if (this.useFishAudio) {
+      return await this.fishAudioService.saveAudioFile(wavBuffer, chunkIndex, outputDir);
+    }
+    
+    // Caso contrário, usar a lógica original
     const fileName = `output_audio_${chunkIndex}.wav`;
     const filePath = path.join(outputDir, fileName);
     
@@ -428,8 +466,8 @@ export class TTSService {
     const audioTimer = new Timer('Conversão de áudio');
     audioTimer.logStart();
     
-    // Processar 5 chunks por vez
-    const batchSize = BATCH_SIZES.AUDIO_PROCESSING;
+    // Ajustar batch size baseado no modo de áudio
+    const batchSize = this.useFishAudio ? BATCH_SIZES.AUDIO_PROCESSING_FISH : BATCH_SIZES.AUDIO_PROCESSING;
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
       totalTimer.log(`Processando bloco ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)...`);
@@ -439,9 +477,18 @@ export class TTSService {
         try {
           audioTimer.log(`Iniciando conversão do chunk ${chunk.chunkIndex + 1}/${chunks.length}...`);
           
-          const rawAudio = await this.convertToSpeech(chunk);
-          const wavAudio = this.convertToWav(rawAudio);
-          const filePath = await this.saveAudioFile(wavAudio, chunk.chunkIndex, outputDir);
+          const audioData = await this.convertToSpeech(chunk);
+          let finalAudio: Buffer;
+          
+          if (this.useFishAudio) {
+            // Fish Audio já retorna WAV, não precisa converter
+            finalAudio = audioData;
+          } else {
+            // Google Gemini retorna raw audio, precisa converter para WAV
+            finalAudio = this.convertToWav(audioData);
+          }
+          
+          const filePath = await this.saveAudioFile(finalAudio, chunk.chunkIndex, outputDir);
           
           audioTimer.log(`Chunk ${chunk.chunkIndex + 1} salvo: ${path.basename(filePath)}`);
           return filePath;
@@ -477,9 +524,18 @@ export class TTSService {
           try {
             audioTimer.log(`🔄 Retry chunk ${failedChunk.chunkIndex + 1}/${chunks.length}...`);
             
-            const rawAudio = await this.convertToSpeech(failedChunk);
-            const wavAudio = this.convertToWav(rawAudio);
-            const filePath = await this.saveAudioFile(wavAudio, failedChunk.chunkIndex, outputDir);
+            const audioData = await this.convertToSpeech(failedChunk);
+            let finalAudio: Buffer;
+            
+            if (this.useFishAudio) {
+              // Fish Audio já retorna WAV, não precisa converter
+              finalAudio = audioData;
+            } else {
+              // Google Gemini retorna raw audio, precisa converter para WAV
+              finalAudio = this.convertToWav(audioData);
+            }
+            
+            const filePath = await this.saveAudioFile(finalAudio, failedChunk.chunkIndex, outputDir);
             
             savedFiles.push(filePath);
             audioTimer.log(`✅ Chunk ${failedChunk.chunkIndex + 1} salvo no retry: ${path.basename(filePath)}`);
@@ -511,10 +567,15 @@ export class TTSService {
         }
       }
       
-      // Delay maior entre blocos para evitar rate limiting (free tier: 3 requests/minuto)
+      // Delay entre blocos baseado no modo de áudio
       if (i + batchSize < chunks.length) {
-        audioTimer.log('Aguardando 30s antes do próximo bloco (free tier limits)...');
-        await new Promise(resolve => setTimeout(resolve, 30000)); // 30 segundos
+        if (this.useFishAudio) {
+          audioTimer.log('Aguardando 3s antes do próximo bloco (Fish Audio)...');
+          await new Promise(resolve => setTimeout(resolve, 3000)); // 3 segundos para Fish Audio
+        } else {
+          audioTimer.log('Aguardando 30s antes do próximo bloco (Google free tier limits)...');
+          await new Promise(resolve => setTimeout(resolve, 30000)); // 30 segundos para Google
+        }
       }
     }
     
@@ -759,23 +820,28 @@ INSTRUÇÕES DE FOTORREALISMO OBRIGATÓRIAS:
 
 ${chunksText}
 
-Para cada chunk, retorne apenas o prompt de imagem, um por linha, numerado sequencialmente. 
+IMPORTANTE: Retorne EXATAMENTE ${chunks.length} prompts numerados, um para cada chunk.
 O PRIMEIRO prompt deve ser uma THUMBNAIL de alto CTR conforme especificado no estilo.
-IMPORTANTE: Use as características dos personagens identificadas acima para manter consistência visual.
+Use as características dos personagens identificadas acima para manter consistência visual.
 Mantenha cada prompt em uma única linha.
 
-Formato esperado:
+Formato obrigatório (EXATAMENTE ${chunks.length} prompts):
 1. [THUMBNAIL - prompt especializado para chunk 1 COM características específicas dos personagens]
 2. [prompt especializado para chunk 2 COM características específicas dos personagens]  
 3. [prompt especializado para chunk 3 COM características específicas dos personagens]
-...`;
+...
+${chunks.length}. [prompt especializado para chunk ${chunks.length} COM características específicas dos personagens]
+
+NÃO adicione prompts extras. PARE no número ${chunks.length}.`;
 
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: specializedPrompt.systemPrompt
+          content: `${specializedPrompt.systemPrompt}
+
+REGRA CRÍTICA: Você deve retornar EXATAMENTE ${chunks.length} prompts numerados. Nem mais, nem menos. Conte cuidadosamente antes de responder.`
         },
         {
           role: 'user',
@@ -798,6 +864,25 @@ Formato esperado:
     const prompts = lines
       .filter((line: string) => /^\d+\.\s/.test(line.trim()))
       .map((line: string) => line.replace(/^\d+\.\s/, '').trim());
+
+    // Garantir que temos exatamente o número correto de prompts
+    const expectedCount = chunks.length;
+    if (prompts.length !== expectedCount) {
+      console.warn(`⚠️ ChatGPT retornou ${prompts.length} prompts, mas esperávamos ${expectedCount}`);
+      
+      if (prompts.length > expectedCount) {
+        // Se temos prompts demais, pegar apenas os primeiros
+        console.log(`✂️ Limitando para os primeiros ${expectedCount} prompts`);
+        return prompts.slice(0, expectedCount);
+      } else {
+        // Se temos prompts de menos, duplicar o último
+        console.log(`📋 Duplicando prompts para atingir ${expectedCount}`);
+        while (prompts.length < expectedCount) {
+          const lastPrompt = prompts[prompts.length - 1] || 'Photorealistic professional photograph, cinematic quality';
+          prompts.push(lastPrompt);
+        }
+      }
+    }
 
     return prompts;
   }
