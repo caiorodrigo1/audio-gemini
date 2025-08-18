@@ -7,6 +7,7 @@ import { IMAGE_PROMPTS, YT_CODE_MAPPING, GENERAL_PROMPT, PromptConfig } from '..
 import { Timer } from '../utils/timer.util';
 import { TextChunk } from '../interfaces/text-chunk.interface';
 import { WhiskApiResponse, WhiskApiPayload } from '../interfaces/whisk-response.interface';
+import { WhiskAuthService } from './whisk-auth.service';
 import { AUDIO_CONFIG, BATCH_SIZES, TIMEOUTS, FILE_PATTERNS } from '../constants';
 
 
@@ -16,7 +17,7 @@ export class TTSService {
   private whiskToken: string;
   private consoleService: any;
 
-  constructor() {
+  constructor(private readonly whiskAuthService: WhiskAuthService) {
     this.config = loadEnvConfig();
     this.whiskToken = this.config.whiskToken;
     
@@ -64,6 +65,33 @@ export class TTSService {
       console.log('🔄 Token Whisk recarregado do .env');
     }
   }
+
+
+
+  /**
+   * Tenta renovar o token automaticamente
+   */
+  private async renewTokenAutomatically(): Promise<string> {
+    console.log('🔄 Iniciando renovação automática do token...');
+    
+    try {
+      const newToken = await this.whiskAuthService.extractWhiskToken();
+      
+      // Atualizar token no .env
+      await this.whiskAuthService.updateTokenInEnv(newToken);
+      
+      // Recarregar configuração
+      this.whiskToken = newToken;
+      
+      console.log('✅ Token renovado automaticamente!');
+      return newToken;
+    } catch (error) {
+      console.error('❌ Falha na renovação automática:', error.message);
+      throw new Error(`Não foi possível renovar o token automaticamente: ${error.message}`);
+    }
+  }
+
+
 
   cleanTitleFromFilename(filename: string): string {
     // Remove extensão se houver
@@ -919,6 +947,7 @@ PROMPT CORRIGIDO:`;
   async callWhiskAPI(prompt: string): Promise<Buffer> {
     const maxRetries = 3;
     let lastError: any;
+    let tokenRenewed = false;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
@@ -989,42 +1018,57 @@ PROMPT CORRIGIDO:`;
 
       } catch (error) {
         lastError = error;
-        const isUnauthorized = error.response?.status === 401;
+        const isUnauthorized = error.response?.status === 401 || error.response?.status === 403;
         const isRateLimit = error.response?.status === 429;
         const isServerError = error.response?.status >= 500;
         
         console.error(`❌ Tentativa ${attempt + 1}/${maxRetries} falhou:`, error.message);
         
-        if (isUnauthorized) {
-          console.log(`🔑 Erro de autenticação detectado (401) - Token Whisk expirado!`);
-          console.log(`🚨 INTERRUPÇÃO: Token do Whisk precisa ser renovado`);
+        if (isUnauthorized && !tokenRenewed) {
+          console.log(`🔑 Erro de autenticação detectado (${error.response?.status}) - Token Whisk expirado!`);
+          console.log(`🤖 Tentando renovar token automaticamente...`);
           
-          // Tocar som de alerta
-          this.playErrorSound();
-          
-          if (this.consoleService && typeof this.consoleService.promptForNewToken === 'function') {
-            try {
-              console.log(`🔔 Aguardando novo token...`);
-              const newToken = await this.consoleService.promptForNewToken();
-              if (newToken && newToken.length > 10) {
-                await this.updateWhiskToken(newToken);
-                console.log(`🔄 Tentando novamente com o novo token...`);
-                continue; // Tentar novamente com novo token
-              } else {
-                console.log(`❌ Token inválido fornecido`);
+          try {
+            await this.renewTokenAutomatically();
+            tokenRenewed = true;
+            console.log(`✅ Token renovado! Tentando novamente...`);
+            continue; // Tentar novamente com novo token
+          } catch (renewError) {
+            console.error(`❌ Falha na renovação automática:`, renewError.message);
+            console.log(`🔔 Tentando método manual como fallback...`);
+            
+            // Fallback para método manual
+            this.playErrorSound();
+            if (this.consoleService && typeof this.consoleService.promptForNewToken === 'function') {
+              try {
+                console.log(`🔔 Aguardando novo token manual...`);
+                const newToken = await this.consoleService.promptForNewToken();
+                if (newToken && newToken.length > 10) {
+                  await this.updateWhiskToken(newToken);
+                  tokenRenewed = true;
+                  console.log(`🔄 Tentando novamente com o novo token manual...`);
+                  continue;
+                } else {
+                  console.log(`❌ Token inválido fornecido`);
+                  this.playErrorSound();
+                  break;
+                }
+              } catch (tokenError) {
+                console.error(`❌ Erro ao obter novo token manual:`, tokenError.message);
                 this.playErrorSound();
                 break;
               }
-            } catch (tokenError) {
-              console.error(`❌ Erro ao obter novo token:`, tokenError.message);
+            } else {
+              console.log(`❌ Ambos os métodos falharam - consulte a documentação`);
+              console.log(`💡 Execute: npm run extract-token`);
               this.playErrorSound();
               break;
             }
-          } else {
-            console.log(`❌ Console service não disponível para solicitar novo token`);
-            this.playErrorSound();
-            break;
           }
+        } else if (isUnauthorized && tokenRenewed) {
+          console.log(`❌ Token ainda inválido após renovação - verifique configuração`);
+          this.playErrorSound();
+          break;
         } else if (isRateLimit || isServerError) {
           console.log(`🔄 Erro de rate limit/servidor, tentando novamente...`);
           if (attempt < maxRetries - 1) {

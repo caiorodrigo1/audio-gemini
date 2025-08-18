@@ -5,7 +5,10 @@
   "scripts": {
     "start": "ts-node src/main.ts",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "extract-token": "ts-node src/extract-token.ts",
+    "extract-token-headless": "ts-node src/extract-token.ts --headless",
+    "extract-token-with-creds": "ts-node src/extract-token.ts --email=seu_email@gmail.com --password=sua_senha"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +25,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.13",
+    "@types/puppeteer": "^7.0.4",
+    "puppeteer": "^24.16.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }
