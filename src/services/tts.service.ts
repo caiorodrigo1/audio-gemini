@@ -151,7 +151,7 @@ export class TTSService {
   }
 
   async convertToSpeech(chunk: TextChunk): Promise<Buffer> {
-    const maxRetries = Math.min(3, this.apiKeys.length);
+    const maxRetries = 5;
     let lastError: any;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -267,10 +267,21 @@ export class TTSService {
       }
     }
     
-    console.error(`❌ Todas as tentativas falharam para chunk ${chunk.chunkIndex + 1}`);
+    console.error(`❌ Todas as ${maxRetries} tentativas falharam para chunk ${chunk.chunkIndex + 1}`);
     if (lastError.response) {
       console.error('Última resposta da API:', lastError.response.data);
     }
+    
+    // Tocar som de erro e parar a aplicação
+    console.error(`🚨 ERRO CRÍTICO: Chunk ${chunk.chunkIndex + 1} falhou após ${maxRetries} tentativas!`);
+    console.error('🛑 Parando a aplicação...');
+    this.playErrorSound();
+    
+    // Aguardar um pouco para o som tocar antes de sair
+    setTimeout(() => {
+      process.exit(1);
+    }, 2000);
+    
     throw lastError;
   }
 
@@ -1083,36 +1094,38 @@ PROMPT CORRIGIDO:`;
     const prompt = `TÍTULO DA HISTÓRIA: "${cleanTitle}"
 ESTILO: ${this.getPromptStyleName(promptType)}
 
-Analise este título e crie um prompt de THUMBNAIL CHAMATIVA focado em ALTA CTR (Click-Through Rate).
+Crie um prompt FOTORREALISTA de thumbnail baseado DIRETAMENTE na cena específica do título fornecido.
 
-ELEMENTOS OBRIGATÓRIOS PARA ALTA CTR:
-- ROSTO EXPRESSIVO em primeiro plano (emoção intensa: medo, choque, tristeza, raiva)
-- AÇÃO ou TENSÃO visual clara
-- CONTRASTE de cores forte (cores complementares)
-- ELEMENTO DE MISTÉRIO ou suspense
-- COMPOSIÇÃO que guie o olhar para o centro
-- ILUMINAÇÃO dramática (luz vs sombra)
+OBRIGATÓRIO - FOTORREALISMO EXTREMO:
+- SEMPRE comece com "Photorealistic professional photograph"
+- SEMPRE inclua "shot with Canon EOS R5, 85mm f/1.4 lens, professional studio lighting"
+- SEMPRE especifique "ultra-realistic skin textures, pore-level detail, natural subsurface scattering"
+- SEMPRE inclua "cinematic color grading, shot on Arri Alexa, film grain texture"
+- NUNCA use "illustration", "art", "drawing", "cartoon", "animated", "digital art"
+- SEMPRE use "photograph of real person" ao invés de "image"
 
-INSTRUÇÕES ESPECÍFICAS:
-1. Identifique o TEMA PRINCIPAL do título "${cleanTitle}"
-2. Crie uma cena que represente o MOMENTO MAIS DRAMÁTICO da história
-3. Foque em UM PERSONAGEM PRINCIPAL com expressão facial INTENSA
-4. Adicione elementos visuais que criem CURIOSIDADE sobre o que aconteceu
-5. Use cores que se destaquem no feed (evite tons apagados)
+FOCO NA CENA ESPECÍFICA DO TÍTULO:
+1. Analise o TÍTULO LITERALMENTE - identifique a situação, personagem ou evento específico
+2. Crie uma cena que REPRESENTA EXATAMENTE o que o título descreve
+3. FOQUE no MOMENTO CENTRAL da história mencionada no título
+4. Use DETALHES ESPECÍFICOS do contexto cultural/temporal do tipo de história
+5. PERSONALIZE baseado no que o título sugere (não use cenas genéricas)
 
-FORMATO OBRIGATÓRIO:
-- Comece com "Photorealistic thumbnail shot"
-- Inclua detalhes técnicos: "professional camera, 85mm lens, cinematic lighting"
-- Especifique expressão facial detalhada e emoção
-- Descreva cenário de forma que gere curiosidade
+COMPOSIÇÃO PARA ALTA CTR:
+- Personagem PRINCIPAL em primeiro plano ocupando 60-70% do quadro
+- Expressão facial ESPECÍFICA para a situação do título (não genérica)
+- Cenário que CONTA A HISTÓRIA do título visualmente
+- Elementos visuais que remetam diretamente ao título
+- Iluminação dramática que destaque a emoção da cena específica
 
-PROIBIDO:
-- Thumbnails genéricas ou sem emoção
-- Rostos pequenos ou distantes
-- Cenários sem foco central
-- Cores apagadas ou monocromáticas
+DETALHES TÉCNICOS OBRIGATÓRIOS:
+- "professional photography equipment, Phase One XF IQ4, Schneider Kreuznach lens"
+- "realistic facial expressions with micro-expressions, authentic human emotions"
+- "natural lighting setup with key light, fill light, rim light"
+- "sharp focus on eyes, shallow depth of field background blur"
+- "color temperature 5600K, professional color correction"
 
-Retorne APENAS o prompt da thumbnail, uma linha completa e detalhada.`;
+Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma linha completa e detalhada.`;
 
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: 'gpt-4o-mini',

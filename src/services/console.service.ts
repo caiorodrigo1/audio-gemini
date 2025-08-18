@@ -222,7 +222,7 @@ export class ConsoleService {
       }
     };
 
-    const createDateTimeFolder = async (baseDir: string = 'D:\\Canais Dark'): Promise<string> => {
+    const createDateTimeFolder = async (baseDir: string = 'D:\\Canais Dark', fileName?: string): Promise<string> => {
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -233,14 +233,25 @@ export class ConsoleService {
       const sequentialNumber = await getNextSequentialNumber(baseDir);
       const sequentialPart = String(sequentialNumber).padStart(2, '0');
       
-      const folderName = `${sequentialPart} - ${year}_${month}_${day} ${hours}_${minutes}`;
+      let folderName = `${sequentialPart} - ${year}_${month}_${day} ${hours}_${minutes}`;
+      
+      if (fileName) {
+        // Extrair nome do arquivo sem extensão e limpar caracteres inválidos para nome de pasta
+        const cleanFileName = path.basename(fileName, path.extname(fileName))
+          .replace(/[<>:"/\\|?*]/g, '') // Remover caracteres inválidos para pastas no Windows
+          .trim();
+        if (cleanFileName) {
+          folderName = `${folderName} - ${cleanFileName}`;
+        }
+      }
+      
       return path.join(baseDir, folderName);
     };
 
     const processText = async (text: string, baseDir?: string, filePath?: string) => {
       try {
         console.log('\nProcessando texto...');
-        const outputDir = await createDateTimeFolder(baseDir);
+        const outputDir = await createDateTimeFolder(baseDir, filePath);
         const savedFiles = await this.ttsService.processTextToSpeech(text, outputDir, filePath);
         
         console.log('\n✅ Conversão concluída com sucesso!');
@@ -250,6 +261,21 @@ export class ConsoleService {
         savedFiles.forEach((file, index) => {
           console.log(`  ${index + 1}. ${path.basename(file)}`);
         });
+        
+        // Mover arquivo de texto original para dentro da pasta criada
+        if (filePath) {
+          try {
+            const originalFileName = path.basename(filePath);
+            const newFilePath = path.join(outputDir, originalFileName);
+            
+            console.log(`\n📂 Movendo arquivo de roteiro para a pasta criada...`);
+            await fs.rename(filePath, newFilePath);
+            console.log(`✅ Arquivo "${originalFileName}" movido para: ${path.basename(outputDir)}`);
+          } catch (moveError) {
+            console.warn(`⚠️ Não foi possível mover o arquivo de roteiro: ${moveError.message}`);
+          }
+        }
+        
         console.log('');
         
       } catch (error) {
