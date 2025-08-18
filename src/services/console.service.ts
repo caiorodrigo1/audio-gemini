@@ -235,17 +235,9 @@ export class ConsoleService {
       
       let folderName = `${sequentialPart} - ${year}_${month}_${day} ${hours}_${minutes}`;
       
-      if (fileName) {
-        // Extrair nome do arquivo sem extensão e limpar caracteres inválidos para nome de pasta
-        const cleanFileName = path.basename(fileName, path.extname(fileName))
-          .replace(/[<>:"/\\|?*]/g, '') // Remover caracteres inválidos para pastas no Windows
-          .trim();
-        if (cleanFileName) {
-          folderName = `${folderName} - ${cleanFileName}`;
-        }
-      }
-      
-      return path.join(baseDir, folderName);
+      const finalPath = path.join(baseDir, folderName);
+      console.log(`🗂️ Caminho final da pasta: "${finalPath}"`);
+      return finalPath;
     };
 
     const processText = async (text: string, baseDir?: string, filePath?: string) => {

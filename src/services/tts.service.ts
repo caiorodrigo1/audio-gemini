@@ -401,14 +401,26 @@ export class TTSService {
 
     // Criar diretório de saída se não existir
     try {
+      console.log(`📁 Criando diretório: ${outputDir}`);
       await fs.mkdir(outputDir, { recursive: true });
+      console.log(`✅ Diretório criado com sucesso: ${outputDir}`);
+      
+      // Verificar se o diretório realmente foi criado e é acessível
+      const stats = await fs.stat(outputDir);
+      console.log(`📊 Diretório verificado - Permissions: ${stats.mode.toString(8)}`);
     } catch (error) {
-      // Diretório já existe
+      console.error(`❌ Erro ao criar/verificar diretório: ${error.message}`);
+      throw error;
     }
 
     const chunks = this.splitTextIntoChunks(text);
     const savedFiles: string[] = [];
 
+    console.log(`📊 RESUMO DE PROCESSAMENTO:`);
+    console.log(`   • Total de chunks de texto: ${chunks.length}`);
+    console.log(`   • Relação esperada: 1 imagem para cada chunk`);
+    console.log(`   • Total de imagens que serão geradas: ${chunks.length}`);
+    
     totalTimer.log(`Processando ${chunks.length} chunks de texto...`);
     console.log(`🔑 API keys carregadas: ${this.apiKeys.length}`);
 
@@ -685,6 +697,11 @@ Seja específico e detalhado para garantir consistência visual.`;
     // Salvar prompts em arquivo
     await this.saveImagePrompts(allPrompts, outputDir);
     
+    console.log(`📝 PROMPTS GERADOS: ${allPrompts.length} prompts para ${chunks.length} chunks`);
+    if (allPrompts.length !== chunks.length) {
+      console.warn(`⚠️ AVISO: Número de prompts (${allPrompts.length}) diferente do número de chunks (${chunks.length})`);
+    }
+    
     return allPrompts;
   }
 
@@ -826,11 +843,16 @@ Data de criação: ${new Date().toLocaleString('pt-BR')}
     }
 
     imageGenTimer.log(`🖼️ Gerando ${prompts.length} imagem(ns) com Whisk...`);
+    console.log(`🎯 CONFIRMAÇÃO: Iniciando geração de ${prompts.length} imagens (1 para cada chunk de áudio)`);
+
+    let successfulImages = 0;
+    let skippedImages = 0;
 
     for (let i = 0; i < prompts.length; i++) {
       const prompt = prompts[i];
       if (prompt.startsWith('[ERRO]')) {
         imageGenTimer.log(`⏭️ Pulando prompt ${i + 1} (erro)`);
+        skippedImages++;
         continue;
       }
 
@@ -838,8 +860,10 @@ Data de criação: ${new Date().toLocaleString('pt-BR')}
       const success = await this.tryGenerateImageWithCorrection(prompt, i, outputDir, imageGenTimer);
       
       if (success) {
+        successfulImages++;
         imageGenTimer.log(`✅ Imagem ${i + 1} salva com sucesso`);
       } else {
+        skippedImages++;
         imageGenTimer.log(`❌ Pulando imagem ${i + 1} após 3 tentativas de correção`);
       }
 
@@ -849,6 +873,12 @@ Data de criação: ${new Date().toLocaleString('pt-BR')}
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
+
+    console.log(`📊 RESUMO FINAL DA GERAÇÃO DE IMAGENS:`);
+    console.log(`   • Imagens geradas com sucesso: ${successfulImages}`);
+    console.log(`   • Imagens puladas/erro: ${skippedImages}`);
+    console.log(`   • Total processado: ${successfulImages + skippedImages}/${prompts.length}`);
+    console.log(`   • Status: ${successfulImages === prompts.length ? '✅ Todas as imagens geradas' : '⚠️ Algumas imagens falharam'}`);
   }
 
   async tryGenerateImageWithCorrection(originalPrompt: string, imageIndex: number, outputDir: string, timer?: Timer): Promise<boolean> {
