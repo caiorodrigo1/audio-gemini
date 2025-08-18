@@ -1303,14 +1303,14 @@ Linux/Mac:
 
       console.log(`📊 Encontrados ${audioFiles.length} áudios e ${imageFiles.length} imagens`);
 
-      // Verificar se temos imagens suficientes (2 imagens por áudio)
-      const requiredImages = audioFiles.length * 2;
+      // Verificar se temos imagens suficientes (1 imagem por áudio)
+      const requiredImages = audioFiles.length;
       if (imageFiles.length < requiredImages) {
-        console.warn(`⚠️ Aviso: Temos ${imageFiles.length} imagens, mas precisamos de ${requiredImages} (2 por áudio)`);
+        console.warn(`⚠️ Aviso: Temos ${imageFiles.length} imagens, mas precisamos de ${requiredImages} (1 por áudio)`);
         console.log(`Algumas imagens serão reutilizadas...`);
       }
 
-      // Criar lista de inputs para FFmpeg - 2 imagens por áudio
+      // Criar lista de inputs para FFmpeg - 1 imagem por áudio
       const videoSegments: string[] = [];
 
       for (let i = 0; i < audioFiles.length; i++) {
@@ -1324,75 +1324,54 @@ Linux/Mac:
           continue;
         }
         
-        // Usar 2 imagens para este áudio
-        const image1Index = (i * 2) % imageFiles.length;
-        const image2Index = (i * 2 + 1) % imageFiles.length;
+        // Usar 1 imagem para este áudio
+        const imageIndex = i % imageFiles.length;
+        const image = imageFiles[imageIndex];
         
-        const image1 = imageFiles[image1Index];
-        const image2 = imageFiles[image2Index];
-        
-        // Verificar se arquivos de imagem existem
+        // Verificar se arquivo de imagem existe
         try {
-          await fs.access(image1);
-          await fs.access(image2);
+          await fs.access(image);
         } catch (error) {
           console.error(`❌ Arquivo de imagem não encontrado: ${error.message}`);
           continue;
         }
         
-        console.log(`🎥 Criando segmento ${i + 1}/${audioFiles.length} (2 imagens por áudio)...`);
-        console.log(`   📸 Imagem 1: ${path.basename(image1)}`);
-        console.log(`   📸 Imagem 2: ${path.basename(image2)}`);
+        console.log(`🎥 Criando segmento ${i + 1}/${audioFiles.length} (1 imagem por áudio)...`);
+        console.log(`   📸 Imagem: ${path.basename(image)}`);
         console.log(`   🎵 Áudio: ${path.basename(audioFile)}`);
 
-        // Criar dois sub-segmentos: primeira metade e segunda metade do áudio
-        const segment1Output = path.join(outputDir, `segment_${i + 1}_part1.mp4`);
-        const segment2Output = path.join(outputDir, `segment_${i + 1}_part2.mp4`);
+        // Criar segmento com a imagem completa durante todo o áudio
+        const segmentOutput = path.join(outputDir, `segment_${i + 1}.mp4`);
         
         // Obter duração do áudio
         console.log(`📊 Obtendo duração do áudio: ${path.basename(audioFile)}`);
         let totalDuration = 10; // Padrão
-        let halfDuration = 5;   // Padrão
         
         try {
           const durationCommand = `ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${audioFile}"`;
           console.log(`🔍 Executando comando: ${durationCommand}`);
           const durationResult = await execAsync(durationCommand, { maxBuffer: 1024 * 1024 * 10, timeout: 30000 }); // 30s timeout
           totalDuration = parseFloat(durationResult.stdout.trim());
-          halfDuration = totalDuration / 2;
-          console.log(`⏱️ Duração total: ${totalDuration}s, metade: ${halfDuration}s`);
+          console.log(`⏱️ Duração total: ${totalDuration}s`);
         } catch (durationError) {
           console.error(`❌ Erro ao obter duração do áudio:`, durationError.message);
           console.log(`⚠️ Usando duração padrão: ${totalDuration}s`);
         }
         
-        // Primeira metade: primeira imagem + primeira metade do áudio
-        console.log(`🎬 Criando primeira parte do segmento...`);
-        const ffmpegCommand1 = `ffmpeg -y -v error -loop 1 -i "${image1}" -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -t ${halfDuration} "${segment1Output}"`;
+        // Criar segmento: imagem + áudio completo
+        console.log(`🎬 Criando segmento completo...`);
+        const ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
         
         try {
-          await this.executeFFmpegWithRetry(ffmpegCommand1, `primeira parte do segmento ${i + 1}`);
-          console.log(`✅ Primeira parte criada: ${path.basename(segment1Output)}`);
-        } catch (ffmpegError1) {
-          console.error(`❌ Erro na primeira parte:`, ffmpegError1.message);
-          throw ffmpegError1;
+          await this.executeFFmpegWithRetry(ffmpegCommand, `segmento ${i + 1}`);
+          console.log(`✅ Segmento criado: ${path.basename(segmentOutput)}`);
+        } catch (ffmpegError) {
+          console.error(`❌ Erro no segmento:`, ffmpegError.message);
+          throw ffmpegError;
         }
         
-        // Segunda metade: segunda imagem + segunda metade do áudio  
-        console.log(`🎬 Criando segunda parte do segmento...`);
-        const ffmpegCommand2 = `ffmpeg -y -v error -loop 1 -i "${image2}" -ss ${halfDuration} -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -t ${halfDuration} "${segment2Output}"`;
-        
-        try {
-          await this.executeFFmpegWithRetry(ffmpegCommand2, `segunda parte do segmento ${i + 1}`);
-          console.log(`✅ Segunda parte criada: ${path.basename(segment2Output)}`);
-        } catch (ffmpegError2) {
-          console.error(`❌ Erro na segunda parte:`, ffmpegError2.message);
-          throw ffmpegError2;
-        }
-        
-        videoSegments.push(segment1Output);
-        videoSegments.push(segment2Output);
-        console.log(`✅ Segmento ${i + 1} criado em 2 partes (${halfDuration.toFixed(1)}s cada): ${path.basename(segment1Output)}, ${path.basename(segment2Output)}`);
+        videoSegments.push(segmentOutput);
+        console.log(`✅ Segmento ${i + 1} criado (${totalDuration.toFixed(1)}s): ${path.basename(segmentOutput)}`);
       }
 
       // Criar arquivo de lista para concatenação
