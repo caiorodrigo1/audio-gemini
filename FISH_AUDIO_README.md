@@ -14,13 +14,51 @@ FISH_AUDIO_API_KEY=sua_api_key_do_fish_audio
 FISH_AUDIO_REFERENCE_ID=seu_reference_id_do_modelo
 ```
 
-### 2. Obter API Key e Reference ID
+### 2. Obter API Key e Reference IDs das Vozes
 
 1. **Crie uma conta:** Vá para [https://fish.audio/](https://fish.audio/)
 2. **Obtenha a API Key:** Acesse sua conta e gere uma API key
-3. **Escolha um Reference ID:** Selecione ou crie um modelo de voz e anote o reference ID
+3. **Configure vozes por idioma:** Para cada idioma que você vai usar, crie/selecione um modelo de voz e anote o reference ID
 
-### 3. Executar com Fish Audio
+#### Vozes Suportadas:
+- **🇪🇸 Espanhol (ES)** - Para conteúdo Wild West e Velho Oeste ✅ Configurado
+- **🇩🇪 Alemão (DE)** - Para conteúdo alemão ✅ Configurado  
+- **🇧🇷 Português (PT-BR)** - Para conteúdo brasileiro ✅ Configurado
+- **🇺🇸 Inglês (EN-US)** - Para conteúdo americano
+- **🇮🇹 Italiano (IT)** - Para conteúdo italiano
+- **🇵🇱 Polonês (PL)** - Para conteúdo polonês
+- **🇷🇴 Romeno (RO)** - Para conteúdo romeno
+
+### 3. Configurar Reference IDs das Vozes
+
+Edite o arquivo `src/config/voices.config.ts` e substitua os placeholders pelos seus Reference IDs:
+
+```typescript
+{
+  id: 'spanish_male',
+  name: 'Espanhol Masculino',
+  language: 'ES',
+  description: 'Voz masculina espanhola - ideal para conteúdo em espanhol',
+  referenceId: '3f45a7fd7a614655a61eb7027b955783' // ✅ Já configurado
+},
+{
+  id: 'german_male',
+  name: 'Alemão Masculino',
+  language: 'DE',
+  description: 'Voz masculina alemã - ideal para conteúdo em alemão',
+  referenceId: '90042f762dbf49baa2e7776d011eee6b' // ✅ Já configurado
+},
+{
+  id: 'portuguese_male',
+  name: 'Português Masculino',
+  language: 'PT-BR', 
+  description: 'Voz masculina brasileira - ideal para conteúdo em português',
+  referenceId: 'a35003f7cc784a989bf2d54db0d93f8f' // ✅ Já configurado
+},
+// ... outras vozes
+```
+
+### 4. Executar com Fish Audio
 
 Você tem duas opções para usar o Fish Audio:
 
@@ -32,7 +70,33 @@ npm run start:fish
 npm start -- --fish-audio
 ```
 
-### 4. Diferenças do Modo Fish Audio
+### 5. Seleção Interativa de Voz
+
+Quando você executar com Fish Audio, o sistema mostrará um menu de seleção:
+
+```bash
+🎙️ ===== SELEÇÃO DE VOZ FISH AUDIO =====
+Vozes disponíveis:
+
+1. ✅ Espanhol Masculino (ES)
+   Voz masculina espanhola - ideal para conteúdo em espanhol
+
+2. ✅ Alemão Masculino (DE)
+   Voz masculina alemã - ideal para conteúdo em alemão
+
+3. ✅ Português Masculino (PT-BR)
+   Voz masculina brasileira - ideal para conteúdo em português
+
+4. ❌ Inglês Masculino (EN-US)
+   Voz masculina americana - ideal para conteúdo em inglês
+
+💡 ✅ = Configurada e pronta para uso
+💡 ❌ = Precisa configurar o Reference ID
+
+Escolha uma voz (número) ou pressione Enter para usar a padrão:
+```
+
+### 6. Diferenças do Modo Fish Audio
 
 Quando o modo Fish Audio está ativo:
 

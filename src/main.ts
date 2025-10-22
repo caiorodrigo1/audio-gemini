@@ -14,7 +14,7 @@ async function bootstrap() {
     console.log('🐟 Modo Fish Audio ativado - usando API alternativa para geração de áudio');
   }
   
-  consoleService.start(useFishAudio);
+  await consoleService.start(useFishAudio);
 }
 
 bootstrap();

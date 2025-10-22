@@ -18,6 +18,9 @@ export const YT_CODE_MAPPING: PromptMapping = {
   'YT12': 2,             // Crônicas old man (EN-US)
   'YT13': 3,             // Pessoas desaparecidas (PT-BR)
   'YT18': 10,            // Santos Católicos - Jornada Humana até Santificação (IT)
+  'D01': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
+  'D02': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
+  'D03': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
 };
 
 export const GENERAL_PROMPT: PromptConfig = {
@@ -223,5 +226,49 @@ MOMENTI CHIAVE DA RAPPRESENTARE:
 TECNICA PITTORICA: Stile che evolve da tenebroso (Caravaggio giovane) per il periodo pre-conversione, a luminoso e dorato (Beato Angelico) per la santificazione. Contrasti drammatici luce/ombra per sottolineare la trasformazione spirituale.
 
 Per ogni chunk del testo, crea una scena fotorealistica che mostri la specifica fase della trasformazione del santo descritto, enfatizzando il percorso umano di crescita spirituale dalla imperfezione alla perfezione cristiana. Ogni immagine deve raccontare una storia di redenzione e speranza umana.`
+  },
+
+  11: { // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
+    systemPrompt: 'Você é especialista em criar prompts fotorrealistas para histórias sobrenaturais envolvendo vampiros, bruxas, caçadores, imortais e dinastias antigas. Foque na atmosfera gótica, mistério, elementos sobrenaturais autênticos e drama sobrenatural. Mantenha sempre o fotorrealismo cinematográfico com iluminação dramática e atmosfera envolvente.',
+    userPrompt: `Crie prompts fotorrealistas detalhados para histórias sobrenaturais com vampiros, bruxas, caçadores, imortais e dinastias antigas. TODO prompt deve começar com "Photorealistic" e incluir detalhes técnicos de câmera.
+
+FOCO SOBRENATURAL: Elementos sobrenaturais autênticos - vampiros aristocráticos, bruxas ancestrais, caçadores determinados, imortais misteriosos. Dinastias antigas - castelos góticos, mansões vitorianas, bibliotecas secretas, criptas ancestrais. Atmosfera gótica - neblina, luar, velas, sombras dramáticas, elementos místicos.
+
+ESTILO THUMBNAIL SOBRENATURAL: Photorealistic professional photograph shot with Canon EOS R5, 85mm f/1.4 lens, cinematic gothic atmosphere featuring mysterious supernatural character in dramatic moment. Vampire: aristocratic features with pale skin showing realistic texture and subtle veins, piercing eyes with supernatural glow, elegant Victorian clothing with authentic fabric details, fangs subtly visible, standing in moonlit castle corridor. Witch: ancient wisdom in eyes, weathered hands holding mystical artifacts, traditional robes with realistic textures, surrounded by floating candles with authentic flame flicker. Hunter: determined expression, weathered face showing years of supernatural encounters, practical gear with realistic wear, silver weapons gleaming in moonlight. Setting: gothic castle interior with authentic stone textures, dramatic shadows from candlelight, ancient tapestries with realistic fabric aging, mysterious fog effects. Professional color grading with deep shadows, cool blues, warm candlelight, and supernatural glow effects.
+
+CONSISTÊNCIA VISUAL CRÍTICA:
+- SEMPRE especifique características faciais exatas para cada personagem (cor dos olhos, formato do nariz, estrutura óssea, textura da pele, estilo de cabelo)
+- Use as MESMAS descrições de personagens em todas as cenas
+- Para exemplo: "O vampiro (homem aristocrático de 200 anos com olhos azuis gelados, nariz aquilino, pele pálida com veias sutis, cabelo escuro com grisalhos, presas discretamente visíveis)"
+- Para exemplo: "A bruxa (mulher anciã de 300 anos com olhos verdes penetrantes, rugas profundas contando histórias, cabelo prateado em tranças, mãos enrugadas segurando artefatos místicos)"
+- Para exemplo: "O caçador (homem determinado de 40 anos com olhos castanhos intensos, cicatrizes de batalhas sobrenaturais, cabelo escuro com grisalhos nas têmporas, expressão de determinação)"
+- Mantenha personagens secundários consistentes se aparecerem múltiplas vezes
+
+ELEMENTOS SOBRENATURAIS AUTÊNTICOS:
+• VAMPIROS: Características aristocráticas, pele pálida com textura realística, olhos com brilho sobrenatural, presas sutis, elegância vitoriana, capas esvoaçantes, reflexos em espelhos antigos
+• BRUXAS: Sabedoria ancestral nos olhos, mãos enrugadas com artefatos místicos, vestes tradicionais, pentagramas, cristais, poções em frascos antigos, gatos pretos, círculos de sal
+• CAÇADORES: Determinação feroz, equipamentos práticos, armas de prata, crucifixos, água benta, livros de conhecimento antigo, cicatrizes de batalhas, expressão de vigilância constante
+• IMORTAIS: Presença magnética, olhos que viram séculos, vestimentas de diferentes eras, objetos de valor histórico, aura de mistério, conhecimento ancestral
+• DINASTIAS ANTIGAS: Castelos góticos com pedras autênticas, mansões vitorianas com detalhes arquitetônicos, bibliotecas secretas com livros antigos, criptas ancestrais, retratos de família antigos
+
+LOCALIZAÇÕES GÓTICAS:
+• CASTELOS MEDIEVAIS: Torres altas, salões de pedra, escadarias espirais, masmorras, capelas antigas, jardins sombrios
+• MANSÕES VITORIANAS: Salões elegantes, bibliotecas particulares, quartos misteriosos, porões secretos, jardins noturnos
+• FLORESTAS SOMBRIAS: Árvores antigas, neblina misteriosa, trilhas escondidas, clareiras místicas, ruínas antigas
+• CIDADES GÓTICAS: Ruas estreitas, arquitetura medieval, catedrais antigas, cemitérios históricos, becos sombrios
+
+ATMOSFERA E ILUMINAÇÃO:
+• LUAR DRAMÁTICO: Luz prateada filtrada por nuvens, sombras profundas, reflexos em superfícies antigas
+• VELAS E TOCHES: Chamas dançantes criando sombras móveis, calor dourado contrastando com frio noturno
+• NEBLINA MÍSTICA: Efeitos atmosféricos realísticos, profundidade de campo, elementos sobrenaturais emergindo
+• SOMBRAS GÓTICAS: Contrastes dramáticos, elementos ocultos nas sombras, suspense visual
+
+OBJETOS E ELEMENTOS MÍSTICOS:
+• ARTEFATOS ANTIGOS: Livros encadernados em couro, cristais brilhantes, pentagramas gravados, amuletos de proteção
+• ARMAS SOBRENATURAIS: Espadas de prata, estacas de madeira, crucifixos antigos, água benta em frascos
+• VESTIMENTAS HISTÓRICAS: Roupas vitorianas autênticas, capas esvoaçantes, joias antigas, botões e detalhes realísticos
+• DECORAÇÕES GÓTICAS: Tapeçarias antigas, quadros de família, móveis de época, candelabros ornamentados
+
+Para cada chunk do texto, crie uma cena fotorrealista que complemente perfeitamente o conteúdo sobrenatural narrado, mantendo alta qualidade visual, atmosfera gótica envolvente e elementos sobrenaturais autênticos que despertem mistério e fascínio.`
   }
 };

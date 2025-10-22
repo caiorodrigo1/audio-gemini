@@ -9,6 +9,8 @@ import { TextChunk } from '../interfaces/text-chunk.interface';
 import { WhiskApiResponse, WhiskApiPayload } from '../interfaces/whisk-response.interface';
 import { WhiskAuthService } from './whisk-auth.service';
 import { FishAudioService } from './fish-audio.service';
+import { VoiceSelectorService } from './voice-selector.service';
+import { ModelSelectorService } from './model-selector.service';
 import { AUDIO_CONFIG, BATCH_SIZES, TIMEOUTS, FILE_PATTERNS } from '../constants';
 
 
@@ -21,7 +23,9 @@ export class TTSService {
 
   constructor(
     private readonly whiskAuthService: WhiskAuthService,
-    private readonly fishAudioService: FishAudioService
+    private readonly fishAudioService: FishAudioService,
+    private readonly voiceSelectorService: VoiceSelectorService,
+    private readonly modelSelectorService: ModelSelectorService
   ) {
     this.config = loadEnvConfig();
     this.whiskToken = this.config.whiskToken;
@@ -34,23 +38,42 @@ export class TTSService {
     this.consoleService = consoleService;
   }
 
-  setUseFishAudio(useFishAudio: boolean) {
+  async setUseFishAudio(useFishAudio: boolean) {
     this.useFishAudio = useFishAudio;
     console.log(`🔧 Modo de áudio configurado: ${useFishAudio ? 'Fish Audio' : 'Google Gemini'}`);
     
     if (useFishAudio) {
-      // Validar configuração do Fish Audio
+      // Validar configuração básica do Fish Audio
       const validation = this.fishAudioService.validateConfiguration();
       if (!validation.isValid) {
-        console.error('❌ Configuração do Fish Audio inválida:');
+        console.error('❌ Configuração básica do Fish Audio inválida:');
         validation.errors.forEach(error => console.error(`   • ${error}`));
         console.log('\n💡 Para configurar o Fish Audio:');
         console.log('   1. Crie uma conta em https://fish.audio/');
         console.log('   2. Obtenha sua API key');
         console.log('   3. Configure no arquivo .env:');
         console.log('      FISH_AUDIO_API_KEY=sua_api_key');
-        console.log('      FISH_AUDIO_REFERENCE_ID=seu_reference_id');
         throw new Error('Configuração do Fish Audio inválida');
+      }
+
+      // Seleção de modelo
+      try {
+        const selectedModel = await this.modelSelectorService.selectModel();
+        this.fishAudioService.setSelectedModel(selectedModel.id);
+        this.modelSelectorService.displayModelInfo(selectedModel);
+      } catch (error) {
+        console.error('❌ Erro na seleção de modelo:', error.message);
+        throw new Error('Falha na seleção de modelo');
+      }
+
+      // Seleção de voz
+      try {
+        const voiceSelection = await this.voiceSelectorService.selectVoice();
+        this.fishAudioService.setSelectedVoice(voiceSelection.selectedVoice);
+        this.voiceSelectorService.displayVoiceInfo(voiceSelection.selectedVoice);
+      } catch (error) {
+        console.error('❌ Erro na seleção de voz:', error.message);
+        throw new Error('Falha na seleção de voz');
       }
     }
   }
@@ -211,20 +234,21 @@ export class TTSService {
     }
     
     // Caso contrário, usar a lógica original do Google Gemini
-    const maxRetries = 5;
+    // Tentar TODAS as API keys disponíveis em caso de resource exhausted
+    const totalKeys = this.apiKeys.length;
+    const maxRetries = totalKeys * 2; // 2 tentativas por API key
     let lastError: any;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      // Rotação sequencial: chunk usa sua API key designada, tentativas usam keys seguintes
-      const totalKeys = this.apiKeys.length;
+      // Rotação através de TODAS as API keys disponíveis
       const baseKeyIndex = chunk.chunkIndex % totalKeys;  // API key base do chunk
-      const apiKeyIndex = (baseKeyIndex + attempt) % totalKeys;  // Rotaciona nas tentativas
+      const apiKeyIndex = (baseKeyIndex + attempt) % totalKeys;  // Rotaciona através de TODAS as keys
       const currentApiKey = this.apiKeys[apiKeyIndex];
       
       if (attempt === 0) {
         console.log(`📝 Chunk ${chunk.chunkIndex + 1} usando API key ${apiKeyIndex + 1}/${totalKeys} (${currentApiKey.substring(0, 15)}...)`);
       } else {
-        console.log(`🔄 Tentativa ${attempt + 1} para chunk ${chunk.chunkIndex + 1} com API key ${apiKeyIndex + 1}/${totalKeys} (${currentApiKey.substring(0, 15)}...)`);
+        console.log(`🔄 Tentativa ${attempt + 1}/${maxRetries} para chunk ${chunk.chunkIndex + 1} com API key ${apiKeyIndex + 1}/${totalKeys} (${currentApiKey.substring(0, 15)}...)`);
       }
       
       
@@ -303,8 +327,12 @@ export class TTSService {
           console.error(`Response data:`, JSON.stringify(error.response.data, null, 2));
         }
         
-        if (isRateLimit || isQuotaError) {
-          console.log(`🔄 Rate limit/quota excedida (API key ${apiKeyIndex + 1}), tentando com próxima API key...`);
+        const isResourceExhausted = error.response?.data?.[0]?.error?.code === 429 || 
+                                   error.response?.data?.[0]?.error?.status === 'RESOURCE_EXHAUSTED' ||
+                                   (error.message && error.message.includes('RESOURCE_EXHAUSTED'));
+        
+        if (isRateLimit || isQuotaError || isResourceExhausted) {
+          console.log(`🔄 Rate limit/quota/resource exhausted (API key ${apiKeyIndex + 1}), tentando com próxima API key...`);
           if (attempt < maxRetries - 1) {
             // Aguardar mais tempo em caso de quota diária esgotada
             const isDaily = error.response?.data?.[0]?.error?.details?.some(
@@ -313,6 +341,9 @@ export class TTSService {
             if (isDaily) {
               console.log(`⏳ Quota diária detectada, aguardando 5s antes da próxima API key...`);
               await new Promise(resolve => setTimeout(resolve, 5000));
+            } else if (isResourceExhausted) {
+              console.log(`⏳ Resource exhausted detectado, aguardando 2s antes da próxima API key...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
             }
             continue;
           }
@@ -328,12 +359,13 @@ export class TTSService {
     }
     
     console.error(`❌ Todas as ${maxRetries} tentativas falharam para chunk ${chunk.chunkIndex + 1}`);
+    console.error(`📊 Tentaram-se todas as ${totalKeys} API keys disponíveis (${maxRetries / totalKeys} tentativas por key)`);
     if (lastError.response) {
       console.error('Última resposta da API:', lastError.response.data);
     }
     
     // Tocar som de erro e parar a aplicação
-    console.error(`🚨 ERRO CRÍTICO: Chunk ${chunk.chunkIndex + 1} falhou após ${maxRetries} tentativas!`);
+    console.error(`🚨 ERRO CRÍTICO: Chunk ${chunk.chunkIndex + 1} falhou após esgotar todas as ${totalKeys} API keys!`);
     console.error('🛑 Parando a aplicação...');
     this.playErrorSound();
     
@@ -631,12 +663,12 @@ export class TTSService {
       const prompts = await this.generateImagePrompts(chunks, outputDir, promptType);
       promptTimer.logEnd();
       
-      // Gerar thumbnail separada baseada no título limpo
+      // Gerar 5 thumbnails separadas baseadas no título limpo
       if (cleanTitle) {
-        totalTimer.log('🎯 Gerando thumbnail baseada no título...');
-        const thumbnailTimer = new Timer('Geração de thumbnail');
+        totalTimer.log('🎯 Gerando 5 thumbnails baseadas no título...');
+        const thumbnailTimer = new Timer('Geração de thumbnails');
         thumbnailTimer.logStart();
-        await this.generateThumbnail(cleanTitle, outputDir, promptType);
+        await this.generateThumbnails(cleanTitle, outputDir, promptType, 5);
         thumbnailTimer.logEnd();
       }
       
@@ -1227,6 +1259,46 @@ PROMPT CORRIGIDO:`;
     await this.upscaleThumbnailTo1920x1080(filePath, cleanTitle, outputDir);
   }
 
+  async generateThumbnails(cleanTitle: string, outputDir: string, promptType: number, count: number = 5): Promise<void> {
+    console.log(`🎯 Criando ${count} thumbnails para: "${cleanTitle}"`);
+    
+    let successfulThumbnails = 0;
+    let failedThumbnails = 0;
+
+    for (let i = 1; i <= count; i++) {
+      try {
+        console.log(`🎨 Gerando thumbnail ${i}/${count}...`);
+        
+        // Gerar prompt de thumbnail baseado no título e tipo de prompt com variação
+        const thumbnailPrompt = await this.generateThumbnailPrompt(cleanTitle, promptType, i);
+        
+        // Gerar imagem com Whisk
+        const imageBuffer = await this.callWhiskAPI(thumbnailPrompt);
+        
+        // Salvar thumbnail com nome do título numerado
+        await this.saveThumbnail(imageBuffer, `${cleanTitle}_thumb${i}`, outputDir);
+        
+        console.log(`✅ Thumbnail ${i} gerada com sucesso: ${cleanTitle}_thumb${i}.jpg`);
+        successfulThumbnails++;
+        
+        // Delay entre thumbnails para evitar rate limiting
+        if (i < count) {
+          console.log(`⏳ Aguardando 3s antes da próxima thumbnail...`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+        
+      } catch (error) {
+        console.error(`❌ Erro ao gerar thumbnail ${i} para "${cleanTitle}":`, error.message);
+        failedThumbnails++;
+      }
+    }
+
+    console.log(`📊 RESUMO DAS THUMBNAILS:`);
+    console.log(`   • Thumbnails geradas com sucesso: ${successfulThumbnails}`);
+    console.log(`   • Thumbnails falharam: ${failedThumbnails}`);
+    console.log(`   • Total processadas: ${successfulThumbnails + failedThumbnails}/${count}`);
+  }
+
   async generateThumbnail(cleanTitle: string, outputDir: string, promptType: number): Promise<void> {
     try {
       console.log(`🎯 Criando thumbnail para: "${cleanTitle}"`);
@@ -1247,11 +1319,53 @@ PROMPT CORRIGIDO:`;
     }
   }
 
-  async generateThumbnailPrompt(cleanTitle: string, promptType: number): Promise<string> {
+  async generateThumbnailPrompt(cleanTitle: string, promptType: number, variation: number = 1): Promise<string> {
     const specializedPrompt = this.getSpecializedPrompt(promptType);
     
+    // Definir variações de composição e foco baseado no número da thumbnail
+    const variations = [
+      {
+        focus: "CLOSE-UP DRAMÁTICO",
+        composition: "primeiro plano extremo com 80% do quadro ocupado pelo rosto expressivo",
+        emotion: "expressão facial intensa e dramática",
+        lighting: "iluminação lateral dramática criando sombras marcantes",
+        angle: "ângulo frontal direto"
+      },
+      {
+        focus: "PLANO MÉDIO DINÂMICO", 
+        composition: "personagem principal ocupando 60% do quadro em ação",
+        emotion: "expressão de determinação e movimento",
+        lighting: "iluminação cinematográfica com contraluz",
+        angle: "ângulo de 3/4 mostrando perfil dinâmico"
+      },
+      {
+        focus: "COMPOSIÇÃO TRIANGULAR",
+        composition: "múltiplos elementos formando triângulo visual",
+        emotion: "contraste emocional entre personagens ou elementos",
+        lighting: "três pontos de luz criando profundidade",
+        angle: "ângulo elevado mostrando hierarquia visual"
+      },
+      {
+        focus: "PLANO AMERICANO IMPACTANTE",
+        composition: "personagem da cintura para cima ocupando 70% do quadro", 
+        emotion: "expressão de conflito interno e tensão",
+        lighting: "iluminação natural dramática vinda de janela",
+        angle: "ângulo ligeiramente baixo criando imponência"
+      },
+      {
+        focus: "ENQUADRAMENTO SIMÉTRICO",
+        composition: "composição centralizada e equilibrada",
+        emotion: "expressão serena mas misteriosa",
+        lighting: "iluminação difusa e uniforme",
+        angle: "ângulo frontal perfeitamente centralizado"
+      }
+    ];
+
+    const selectedVariation = variations[(variation - 1) % variations.length];
+
     const prompt = `TÍTULO DA HISTÓRIA: "${cleanTitle}"
 ESTILO: ${this.getPromptStyleName(promptType)}
+VARIAÇÃO: Thumbnail ${variation}/5 - ${selectedVariation.focus}
 
 Crie um prompt FOTORREALISTA de thumbnail baseado DIRETAMENTE na cena específica do título fornecido.
 
@@ -1270,12 +1384,12 @@ FOCO NA CENA ESPECÍFICA DO TÍTULO:
 4. Use DETALHES ESPECÍFICOS do contexto cultural/temporal do tipo de história
 5. PERSONALIZE baseado no que o título sugere (não use cenas genéricas)
 
-COMPOSIÇÃO PARA ALTA CTR:
-- Personagem PRINCIPAL em primeiro plano ocupando 60-70% do quadro
-- Expressão facial ESPECÍFICA para a situação do título (não genérica)
-- Cenário que CONTA A HISTÓRIA do título visualmente
-- Elementos visuais que remetam diretamente ao título
-- Iluminação dramática que destaque a emoção da cena específica
+COMPOSIÇÃO ESPECÍFICA PARA ESTA VARIAÇÃO:
+- TIPO: ${selectedVariation.focus}
+- COMPOSIÇÃO: ${selectedVariation.composition}
+- EMOÇÃO: ${selectedVariation.emotion}  
+- ILUMINAÇÃO: ${selectedVariation.lighting}
+- ÂNGULO: ${selectedVariation.angle}
 
 DETALHES TÉCNICOS OBRIGATÓRIOS:
 - "professional photography equipment, Phase One XF IQ4, Schneider Kreuznach lens"
@@ -1283,6 +1397,8 @@ DETALHES TÉCNICOS OBRIGATÓRIOS:
 - "natural lighting setup with key light, fill light, rim light"
 - "sharp focus on eyes, shallow depth of field background blur"
 - "color temperature 5600K, professional color correction"
+
+IMPORTANTE: Esta é a thumbnail ${variation} de 5. Crie uma composição ÚNICA e DIFERENTE das outras variações, mas sempre focada no título específico.
 
 Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma linha completa e detalhada.`;
 
@@ -1519,7 +1635,7 @@ Linux/Mac:
         
         // Criar segmento: imagem + áudio completo
         console.log(`🎬 Criando segmento completo...`);
-        const ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        const ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset p4 -tune hq -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
         
         try {
           await this.executeFFmpegWithRetry(ffmpegCommand, `segmento ${i + 1}`);

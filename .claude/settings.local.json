@@ -16,7 +16,12 @@
       "Bash(move:*)",
       "Bash(mv:*)",
       "WebSearch",
-      "WebFetch(domain:docs.fish.audio)"
+      "WebFetch(domain:docs.fish.audio)",
+      "WebFetch(domain:fish.audio)",
+      "WebFetch(domain:speech.fish.audio)",
+      "Bash(/mcp list)",
+      "Bash(claude mcp:*)",
+      "Bash(echo $MAX_CHUNK_LENGTH)"
     ],
     "deny": []
   }
