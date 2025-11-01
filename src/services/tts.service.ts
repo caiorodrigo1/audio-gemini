@@ -461,57 +461,25 @@ export class TTSService {
     }
   }
 
-  async processTextToSpeech(text: string, outputDir: string = this.config.defaultOutputDir, filePath?: string): Promise<string[]> {
-    const totalTimer = new Timer('Processamento completo');
-    totalTimer.logStart();
-
-    if (!text) {
-      throw new Error('Nenhum texto foi fornecido.');
-    }
-
-    // Criar diretório de saída se não existir
-    try {
-      console.log(`📁 Criando diretório: ${outputDir}`);
-      await fs.mkdir(outputDir, { recursive: true });
-      console.log(`✅ Diretório criado com sucesso: ${outputDir}`);
-      
-      // Verificar se o diretório realmente foi criado e é acessível
-      const stats = await fs.stat(outputDir);
-      console.log(`📊 Diretório verificado - Permissions: ${stats.mode.toString(8)}`);
-    } catch (error) {
-      console.error(`❌ Erro ao criar/verificar diretório: ${error.message}`);
-      throw error;
-    }
-
-    const chunks = this.splitTextIntoChunks(text);
+  private async processAudioGeneration(chunks: TextChunk[], outputDir: string, totalTimer: Timer): Promise<string[]> {
     const savedFiles: string[] = [];
-
-    console.log(`📊 RESUMO DE PROCESSAMENTO:`);
-    console.log(`   • Total de chunks de texto: ${chunks.length}`);
-    console.log(`   • Relação esperada: 1 imagem para cada chunk`);
-    console.log(`   • Total de imagens que serão geradas: ${chunks.length}`);
-    
-    totalTimer.log(`Processando ${chunks.length} chunks de texto...`);
-    console.log(`🔑 API keys carregadas: ${this.apiKeys.length}`);
-
-    // Processamento em blocos menores para evitar quota limits
     const audioTimer = new Timer('Conversão de áudio');
     audioTimer.logStart();
-    
+
     // Ajustar batch size baseado no modo de áudio
     const batchSize = this.useFishAudio ? BATCH_SIZES.AUDIO_PROCESSING_FISH : BATCH_SIZES.AUDIO_PROCESSING;
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
-      totalTimer.log(`Processando bloco ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)...`);
-      
+      totalTimer.log(`[ÁUDIO] Processando bloco ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)...`);
+
       // Processar chunks do bloco em paralelo
       const batchPromises = batch.map(async (chunk) => {
         try {
           audioTimer.log(`Iniciando conversão do chunk ${chunk.chunkIndex + 1}/${chunks.length}...`);
-          
+
           const audioData = await this.convertToSpeech(chunk);
           let finalAudio: Buffer;
-          
+
           if (this.useFishAudio) {
             // Fish Audio já retorna WAV, não precisa converter
             finalAudio = audioData;
@@ -519,25 +487,25 @@ export class TTSService {
             // Google Gemini retorna raw audio, precisa converter para WAV
             finalAudio = this.convertToWav(audioData);
           }
-          
+
           const filePath = await this.saveAudioFile(finalAudio, chunk.chunkIndex, outputDir);
-          
+
           audioTimer.log(`Chunk ${chunk.chunkIndex + 1} salvo: ${path.basename(filePath)}`);
           return filePath;
-          
+
         } catch (error) {
           audioTimer.log(`❌ Erro ao processar chunk ${chunk.chunkIndex + 1}: ${error.message}`);
           audioTimer.log('Continuando com próximo chunk...');
           return null;
         }
       });
-      
+
       // Aguardar todos os chunks do bloco terminarem
       const batchResults = await Promise.allSettled(batchPromises);
-      
+
       // Coletar chunks que falharam para retry
       const failedChunks: TextChunk[] = [];
-      
+
       // Adicionar apenas os resultados bem-sucedidos
       batchResults.forEach((result, index) => {
         if (result.status === 'fulfilled' && result.value) {
@@ -547,18 +515,18 @@ export class TTSService {
           failedChunks.push(batch[index]);
         }
       });
-      
+
       // Retry dos chunks que falharam
       if (failedChunks.length > 0) {
         audioTimer.log(`🔄 Tentando novamente ${failedChunks.length} chunk(s) que falharam...`);
-        
+
         for (const failedChunk of failedChunks) {
           try {
             audioTimer.log(`🔄 Retry chunk ${failedChunk.chunkIndex + 1}/${chunks.length}...`);
-            
+
             const audioData = await this.convertToSpeech(failedChunk);
             let finalAudio: Buffer;
-            
+
             if (this.useFishAudio) {
               // Fish Audio já retorna WAV, não precisa converter
               finalAudio = audioData;
@@ -566,39 +534,38 @@ export class TTSService {
               // Google Gemini retorna raw audio, precisa converter para WAV
               finalAudio = this.convertToWav(audioData);
             }
-            
+
             const filePath = await this.saveAudioFile(finalAudio, failedChunk.chunkIndex, outputDir);
-            
+
             savedFiles.push(filePath);
             audioTimer.log(`✅ Chunk ${failedChunk.chunkIndex + 1} salvo no retry: ${path.basename(filePath)}`);
-            
+
           } catch (retryError) {
             audioTimer.log(`❌ Retry falhou para chunk ${failedChunk.chunkIndex + 1}: ${retryError.message}`);
             audioTimer.log(`⏭️ Pulando chunk ${failedChunk.chunkIndex + 1} definitivamente`);
           }
-          
+
           // Delay entre retries
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
-      
+
       // Verificar se muitos chunks falharam consecutivamente (indicativo de problema geral)
       const currentBatchFailed = batchResults.every(result => result.status === 'rejected');
       if (currentBatchFailed && batch.length > 1) {
         console.log(`🚨 ALERTA: Todos os chunks do bloco ${Math.floor(i / batchSize) + 1} falharam!`);
         console.log(`🔍 Possível problema: API keys esgotadas ou erro de conectividade`);
-        
+
         // Se for o primeiro bloco e todos falharam, parar execução
         if (i === 0) {
           console.log(`❌ EXECUÇÃO INTERROMPIDA: Todos os chunks do primeiro bloco falharam`);
           console.log(`💡 Verifique as API keys ou tente novamente mais tarde`);
           this.playErrorSound();
           audioTimer.logEnd();
-          totalTimer.logEnd();
           throw new Error('Execução interrompida: falha crítica na geração de áudio');
         }
       }
-      
+
       // Delay entre blocos baseado no modo de áudio
       if (i + batchSize < chunks.length) {
         if (this.useFishAudio) {
@@ -610,74 +577,154 @@ export class TTSService {
         }
       }
     }
-    
+
     audioTimer.logEnd();
-    
+
     // Estatísticas finais
     const totalChunks = chunks.length;
     const successfulChunks = savedFiles.length;
     const failedChunks = totalChunks - successfulChunks;
-    
+
     totalTimer.log(`📊 Estatísticas de áudio: ${successfulChunks}/${totalChunks} chunks convertidos`);
     if (failedChunks > 0) {
       totalTimer.log(`⚠️ ${failedChunks} chunk(s) falharam definitivamente`);
     }
 
-    // Gerar prompts de imagem após conversão de áudio
+    return savedFiles;
+  }
+
+  private async processImageGeneration(chunks: TextChunk[], outputDir: string, promptType: number, cleanTitle: string, totalTimer: Timer): Promise<void> {
+    totalTimer.log('[IMAGENS] 🎨 Gerando prompts de imagem...');
+    const promptTimer = new Timer('Geração de prompts');
+    promptTimer.logStart();
+    promptTimer.log('📝 Analisando personagens para consistência visual...');
+    const prompts = await this.generateImagePrompts(chunks, outputDir, promptType);
+    promptTimer.logEnd();
+
+    // Gerar 5 thumbnails separadas baseadas no título limpo
+    if (cleanTitle) {
+      totalTimer.log('[IMAGENS] 🎯 Gerando 5 thumbnails baseadas no título...');
+      const thumbnailTimer = new Timer('Geração de thumbnails');
+      thumbnailTimer.logStart();
+      await this.generateThumbnails(cleanTitle, outputDir, promptType, 5);
+      thumbnailTimer.logEnd();
+    }
+
+    // Gerar imagens com Whisk após prompts
+    totalTimer.log('[IMAGENS] 🖼️ Gerando imagens com Whisk...');
+    const imageTimer = new Timer('Geração de imagens');
+    imageTimer.logStart();
+    await this.generateImagesWithWhisk(prompts, outputDir);
+    imageTimer.logEnd();
+  }
+
+  private startLiveTimer(startTime: number): NodeJS.Timeout {
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const minutes = Math.floor(elapsed / 60000);
+      const seconds = Math.floor((elapsed % 60000) / 1000);
+      const timeString = `${minutes}m ${seconds}s`;
+
+      // Usar process.stdout.write para atualizar na mesma linha
+      process.stdout.write(`\r⏱️  Tempo decorrido: ${timeString}     `);
+    }, 1000); // Atualiza a cada 1 segundo
+
+    return interval;
+  }
+
+  private stopLiveTimer(interval: NodeJS.Timeout): void {
+    clearInterval(interval);
+    process.stdout.write('\n'); // Nova linha após parar o timer
+  }
+
+  async processTextToSpeech(text: string, outputDir: string = this.config.defaultOutputDir, filePath?: string): Promise<string[]> {
+    const totalTimer = new Timer('Processamento completo');
+    totalTimer.logStart();
+
+    // Iniciar timer em tempo real
+    const startTime = Date.now();
+    const liveTimer = this.startLiveTimer(startTime);
+
+    if (!text) {
+      this.stopLiveTimer(liveTimer);
+      throw new Error('Nenhum texto foi fornecido.');
+    }
+
+    // Criar diretório de saída se não existir
     try {
-      // Detectar código YT e determinar tipo de prompt primeiro
-      let promptType = 0; // Default para prompt geral
-      let cleanTitle = '';
-      
-      if (filePath) {
-        const ytCode = this.extractYTCodeFromPath(filePath);
-        const fileName = path.basename(filePath, path.extname(filePath));
-        cleanTitle = this.cleanTitleFromFilename(fileName);
-        
-        if (ytCode) {
-          promptType = this.getPromptTypeByYTCode(ytCode);
-          const promptNames = {
-            0: 'Geral',
-            1: 'Wild West (EN-US)', 
-            2: 'Old Man Chronicles (EN-US)',
-            3: 'Pessoas Desaparecidas (PT-BR)',
-            4: 'Bridgerton Inglês (EN)',
-            5: 'Velho Oeste Espanhol (ES)',
-            6: 'Milionários Polonês (PL)',
-            7: 'Famílias Italiano (IT)',
-            8: 'Milionários Romeno (RO)',
-            9: 'Bridgerton Brasileiro (PT-BR)',
-            10: 'Jornada dos Santos - Humano até Santificação (IT)'
-          };
-          totalTimer.log(`📁 Código detectado: ${ytCode} → ${promptNames[promptType] || `Prompt tipo ${promptType}`}`);
-        } else {
-          totalTimer.log(`📁 Código YT não identificado → Usando prompt geral baseado no conteúdo`);
-          promptType = 0; // Usar prompt geral
-        }
+      console.log(`📁 Criando diretório: ${outputDir}`);
+      await fs.mkdir(outputDir, { recursive: true });
+      console.log(`✅ Diretório criado com sucesso: ${outputDir}`);
+
+      // Verificar se o diretório realmente foi criado e é acessível
+      const stats = await fs.stat(outputDir);
+      console.log(`📊 Diretório verificado - Permissions: ${stats.mode.toString(8)}`);
+    } catch (error) {
+      this.stopLiveTimer(liveTimer);
+      console.error(`❌ Erro ao criar/verificar diretório: ${error.message}`);
+      throw error;
+    }
+
+    const chunks = this.splitTextIntoChunks(text);
+
+    console.log(`📊 RESUMO DE PROCESSAMENTO:`);
+    console.log(`   • Total de chunks de texto: ${chunks.length}`);
+    console.log(`   • Relação esperada: 1 imagem para cada chunk`);
+    console.log(`   • Total de imagens que serão geradas: ${chunks.length}`);
+
+    totalTimer.log(`Processando ${chunks.length} chunks de texto...`);
+    console.log(`🔑 API keys carregadas: ${this.apiKeys.length}`);
+
+    // Detectar código YT e determinar tipo de prompt primeiro
+    let promptType = 0; // Default para prompt geral
+    let cleanTitle = '';
+
+    if (filePath) {
+      const ytCode = this.extractYTCodeFromPath(filePath);
+      const fileName = path.basename(filePath, path.extname(filePath));
+      cleanTitle = this.cleanTitleFromFilename(fileName);
+
+      if (ytCode) {
+        promptType = this.getPromptTypeByYTCode(ytCode);
+        const promptNames = {
+          0: 'Geral',
+          1: 'Wild West (EN-US)',
+          2: 'Old Man Chronicles (EN-US)',
+          3: 'Pessoas Desaparecidas (PT-BR)',
+          4: 'Bridgerton Inglês (EN)',
+          5: 'Velho Oeste Espanhol (ES)',
+          6: 'Milionários Polonês (PL)',
+          7: 'Famílias Italiano (IT)',
+          8: 'Milionários Romeno (RO)',
+          9: 'Bridgerton Brasileiro (PT-BR)',
+          10: 'Jornada dos Santos - Humano até Santificação (IT)'
+        };
+        totalTimer.log(`📁 Código detectado: ${ytCode} → ${promptNames[promptType] || `Prompt tipo ${promptType}`}`);
+      } else {
+        totalTimer.log(`📁 Código YT não identificado → Usando prompt geral baseado no conteúdo`);
+        promptType = 0; // Usar prompt geral
       }
-      
-      totalTimer.log('🎨 Gerando prompts de imagem...');
-      const promptTimer = new Timer('Geração de prompts');
-      promptTimer.logStart();
-      promptTimer.log('📝 Analisando personagens para consistência visual...');
-      const prompts = await this.generateImagePrompts(chunks, outputDir, promptType);
-      promptTimer.logEnd();
-      
-      // Gerar 5 thumbnails separadas baseadas no título limpo
-      if (cleanTitle) {
-        totalTimer.log('🎯 Gerando 5 thumbnails baseadas no título...');
-        const thumbnailTimer = new Timer('Geração de thumbnails');
-        thumbnailTimer.logStart();
-        await this.generateThumbnails(cleanTitle, outputDir, promptType, 5);
-        thumbnailTimer.logEnd();
-      }
-      
-      // Gerar imagens com Whisk após prompts
-      totalTimer.log('🖼️ Gerando imagens com Whisk...');
-      const imageTimer = new Timer('Geração de imagens');
-      imageTimer.logStart();
-      await this.generateImagesWithWhisk(prompts, outputDir);
-      imageTimer.logEnd();
+    }
+
+    // ⚡ PROCESSAMENTO PARALELO: Áudio e Imagens ao mesmo tempo
+    console.log(`\n⚡ INICIANDO PROCESSAMENTO PARALELO`);
+    console.log(`   🎵 Thread 1: Geração de áudios`);
+    console.log(`   🎨 Thread 2: Geração de prompts e imagens\n`);
+
+    let savedFiles: string[] = [];
+
+    try {
+      // Executar áudio e imagens em paralelo
+      const [audioFiles] = await Promise.all([
+        this.processAudioGeneration(chunks, outputDir, totalTimer),
+        this.processImageGeneration(chunks, outputDir, promptType, cleanTitle, totalTimer)
+      ]);
+
+      savedFiles = audioFiles;
+
+      console.log(`\n✅ PROCESSAMENTO PARALELO CONCLUÍDO`);
+      console.log(`   ✅ Áudios: ${audioFiles.length}/${chunks.length} gerados`);
+      console.log(`   ✅ Imagens: Concluído\n`);
 
       // Renderizar vídeo final com FFmpeg
       totalTimer.log('🎬 Renderizando vídeo final...');
@@ -685,17 +732,22 @@ export class TTSService {
       videoTimer.logStart();
       await this.renderVideoWithFFmpeg(outputDir, filePath);
       videoTimer.logEnd();
-      
+
     } catch (error) {
+      this.stopLiveTimer(liveTimer);
       totalTimer.log(`❌ Erro ao gerar prompts/imagens/vídeo: ${error.message}`);
-      totalTimer.log('Áudios foram gerados com sucesso, mas prompts/imagens/vídeo falharam.');
+      totalTimer.log('Processo pode ter sido parcialmente concluído.');
       totalTimer.log(`💡 Para tentar renderizar o vídeo novamente, use o comando:`);
       totalTimer.log(`   RENDER "${outputDir}"`);
+      throw error;
     }
+
+    // Parar o timer em tempo real
+    this.stopLiveTimer(liveTimer);
 
     totalTimer.logEnd();
     console.log(`\n🎯 TEMPO TOTAL DE EXECUÇÃO: ${totalTimer.getElapsedTime()}`);
-    
+
     // Tocar som de notificação quando terminar
     this.playNotificationSound();
     console.log('🔔 Processo concluído! Som de notificação emitido.');
@@ -1741,46 +1793,57 @@ Linux/Mac:
   async retryVideoRendering(folderPath: string): Promise<string> {
     const retryTimer = new Timer('Retry renderização de vídeo');
     retryTimer.logStart();
-    
+
+    // Iniciar timer em tempo real
+    const startTime = Date.now();
+    const liveTimer = this.startLiveTimer(startTime);
+
     try {
       retryTimer.log(`🔄 Tentando renderizar vídeo novamente em: ${folderPath}`);
-      
+
       // Verificar se a pasta existe
       try {
         await fs.access(folderPath);
       } catch (error) {
+        this.stopLiveTimer(liveTimer);
         throw new Error(`Pasta não encontrada: ${folderPath}`);
       }
-      
+
       // Verificar se temos arquivos de áudio e imagem
       const audioFiles = await this.getAudioFiles(folderPath);
       const imageFiles = await this.getImageFiles(folderPath);
-      
+
       if (audioFiles.length === 0) {
+        this.stopLiveTimer(liveTimer);
         throw new Error(`Nenhum arquivo de áudio encontrado em: ${folderPath}`);
       }
-      
+
       if (imageFiles.length === 0) {
+        this.stopLiveTimer(liveTimer);
         throw new Error(`Nenhuma imagem encontrada em: ${folderPath}`);
       }
-      
+
       retryTimer.log(`📊 Encontrados ${audioFiles.length} áudios e ${imageFiles.length} imagens`);
       retryTimer.log(`🎬 Iniciando renderização do vídeo...`);
-      
+
       // Renderizar o vídeo
       const videoPath = await this.renderVideoWithFFmpeg(folderPath);
-      
+
+      // Parar o timer em tempo real
+      this.stopLiveTimer(liveTimer);
+
       retryTimer.logEnd();
       retryTimer.log(`✅ Vídeo renderizado com sucesso: ${videoPath}`);
       console.log(`\n🎯 TEMPO TOTAL DE RENDERIZAÇÃO: ${retryTimer.getElapsedTime()}`);
-      
+
       // Tocar som de notificação quando a renderização terminar
       this.playNotificationSound();
       console.log('🔔 Renderização concluída! Som de notificação emitido.');
-      
+
       return videoPath;
-      
+
     } catch (error) {
+      this.stopLiveTimer(liveTimer);
       retryTimer.log(`❌ Erro ao renderizar vídeo: ${error.message}`);
       throw error;
     }
