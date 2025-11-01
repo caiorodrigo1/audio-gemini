@@ -7,6 +7,7 @@ export const AUDIO_CONFIG = {
 
 export const BATCH_SIZES = {
   AUDIO_PROCESSING: 5,
+  AUDIO_PROCESSING_FISH: 1, // Reduzir para 1 request por vez para economizar
   PROMPT_GENERATION: 5
 } as const;
 

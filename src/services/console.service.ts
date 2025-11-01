@@ -30,9 +30,10 @@ export class ConsoleService {
     });
   }
 
-  start(): void {
-    // Conectar o TTS service com este console service
+  async start(useFishAudio: boolean = false): Promise<void> {
+    // Conectar o TTS service com este console service e informar se deve usar Fish Audio
     this.ttsService.setConsoleService(this);
+    await this.ttsService.setUseFishAudio(useFishAudio);
 
     const rl = readline.createInterface({
       input: process.stdin,
