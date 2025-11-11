@@ -30,10 +30,15 @@ export class ConsoleService {
     });
   }
 
-  async start(useFishAudio: boolean = false): Promise<void> {
+  async start(useFishAudio: boolean = false, concurrentBatches?: number): Promise<void> {
     // Conectar o TTS service com este console service e informar se deve usar Fish Audio
     this.ttsService.setConsoleService(this);
     await this.ttsService.setUseFishAudio(useFishAudio);
+    
+    // Configurar quantidade de batches simultâneos se fornecido
+    if (concurrentBatches !== undefined) {
+      this.ttsService.setConcurrentBatches(concurrentBatches);
+    }
 
     const rl = readline.createInterface({
       input: process.stdin,

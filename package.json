@@ -5,6 +5,8 @@
   "scripts": {
     "start": "ts-node src/main.ts",
     "start:fish": "ts-node src/main.ts --fish-audio",
+    "start:batches": "ts-node src/main.ts --batches=3",
+    "start:fish:batches": "ts-node src/main.ts --fish-audio --batches=2",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
     "extract-token": "ts-node src/extract-token.ts",

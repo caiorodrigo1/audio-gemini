@@ -20,6 +20,7 @@ export class TTSService {
   private whiskToken: string;
   private consoleService: any;
   private useFishAudio: boolean = false;
+  private concurrentBatches?: number; // Quantidade de batches simultâneos configurada pelo usuário
 
   constructor(
     private readonly whiskAuthService: WhiskAuthService,
@@ -36,6 +37,14 @@ export class TTSService {
 
   setConsoleService(consoleService: any) {
     this.consoleService = consoleService;
+  }
+
+  setConcurrentBatches(batches: number): void {
+    if (batches < 1) {
+      throw new Error('A quantidade de batches simultâneos deve ser maior que 0');
+    }
+    this.concurrentBatches = batches;
+    console.log(`⚙️  Configuração de batches simultâneos atualizada: ${batches}`);
   }
 
   async setUseFishAudio(useFishAudio: boolean) {
@@ -466,8 +475,16 @@ export class TTSService {
     const audioTimer = new Timer('Conversão de áudio');
     audioTimer.logStart();
 
-    // Ajustar batch size baseado no modo de áudio
-    const batchSize = this.useFishAudio ? BATCH_SIZES.AUDIO_PROCESSING_FISH : BATCH_SIZES.AUDIO_PROCESSING;
+    // Ajustar batch size baseado no modo de áudio ou usar valor configurado pelo usuário
+    let batchSize: number;
+    if (this.concurrentBatches !== undefined) {
+      // Usar valor configurado pelo usuário via --batches=N
+      batchSize = this.concurrentBatches;
+      audioTimer.log(`📦 Usando batch size configurado pelo usuário: ${batchSize}`);
+    } else {
+      // Usar valor padrão baseado no modo de áudio
+      batchSize = this.useFishAudio ? BATCH_SIZES.AUDIO_PROCESSING_FISH : BATCH_SIZES.AUDIO_PROCESSING;
+    }
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
       totalTimer.log(`[ÁUDIO] Processando bloco ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)...`);
