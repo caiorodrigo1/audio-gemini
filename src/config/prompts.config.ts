@@ -8,8 +8,7 @@ export interface PromptMapping {
 }
 
 export const YT_CODE_MAPPING: PromptMapping = {
-  'YT01': 4,             // Bridgerton Inglês (EN)
-  'YT02': 1,             // Wild West Romance (EN-US)
+  'YT01': 11,            // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
   'YT03': 6,             // Histórias milionários (PL)
   'YT04': 7,             // Histórias famílias (IT)
   'YT05': 8,             // Histórias milionários (RO)
@@ -18,7 +17,7 @@ export const YT_CODE_MAPPING: PromptMapping = {
   'YT12': 2,             // Crônicas old man (EN-US)
   'YT13': 3,             // Pessoas desaparecidas (PT-BR)
   'YT18': 10,            // Santos Católicos - Jornada Humana até Santificação (IT)
-  'D01': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
+  'D01': 11,               
   'D02': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
   'D03': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
 };
