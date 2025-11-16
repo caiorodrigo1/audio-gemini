@@ -3,6 +3,7 @@ import { TTSService } from './tts.service';
 import * as readline from 'readline';
 import * as path from 'path';
 import { promises as fs } from 'fs';
+import { RenderPreset } from '../config/render.config';
 
 @Injectable()
 export class ConsoleService {
@@ -30,22 +31,111 @@ export class ConsoleService {
     });
   }
 
-  async start(useFishAudio: boolean = false): Promise<void> {
+  async promptForBatches(rl: readline.Interface, useFishAudio: boolean): Promise<number | undefined> {
+    return new Promise((resolve) => {
+      const defaultBatch = useFishAudio ? 1 : 5;
+      console.log('\n⚙️  CONFIGURAÇÃO DE BATCHES SIMULTÂNEOS');
+      console.log(`Quantos batches simultâneos de áudio deseja usar?`);
+      console.log(`   Padrão: ${defaultBatch} (pressione Enter para usar o padrão)`);
+      console.log(`   Recomendado: ${useFishAudio ? '1-2' : '3-8'} batches`);
+      console.log(`   Digite um número ou pressione Enter para padrão:`);
+      
+      rl.question('Batches: ', (answer: string) => {
+        const trimmed = answer.trim();
+        if (!trimmed) {
+          console.log(`✅ Usando valor padrão: ${defaultBatch} batches`);
+          resolve(undefined); // Usará o padrão
+          return;
+        }
+        
+        const batches = parseInt(trimmed, 10);
+        if (isNaN(batches) || batches < 1) {
+          console.log(`⚠️  Valor inválido. Usando padrão: ${defaultBatch} batches`);
+          resolve(undefined);
+          return;
+        }
+        
+        console.log(`✅ Configurado: ${batches} batches simultâneos`);
+        resolve(batches);
+      });
+    });
+  }
+
+  async promptForRenderPreset(rl: readline.Interface): Promise<RenderPreset> {
+    return new Promise((resolve) => {
+      console.log('\n🎬 CONFIGURAÇÃO DE QUALIDADE DE RENDERIZAÇÃO');
+      console.log('Qual preset de renderização deseja usar?');
+      console.log('   1) Standard (padrão) - Preset p4, tune hq, alta qualidade');
+      console.log('   2) Fast - Preset p1, tune ll, renderização 2-3x mais rápida');
+      console.log('   Digite 1 ou 2 (padrão: 1):');
+      
+      rl.question('Preset: ', (answer: string) => {
+        const trimmed = answer.trim().toLowerCase();
+        if (!trimmed || trimmed === '1') {
+          console.log('✅ Usando preset: Standard (p4, hq)');
+          resolve('standard');
+          return;
+        }
+        
+        if (trimmed === '2') {
+          console.log('✅ Usando preset: Fast (p1, ll) - renderização otimizada para velocidade');
+          resolve('fast');
+          return;
+        }
+        
+        console.log('⚠️  Opção inválida. Usando padrão: Standard');
+        resolve('standard');
+      });
+    });
+  }
+
+  async start(useFishAudio: boolean = false, concurrentBatches?: number, renderPreset?: RenderPreset): Promise<void> {
     // Conectar o TTS service com este console service e informar se deve usar Fish Audio
     this.ttsService.setConsoleService(this);
     await this.ttsService.setUseFishAudio(useFishAudio);
-
+    
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
     });
 
-    console.log('=== Audio Gemini TTS Console ===');
+    // Se não foram passados via linha de comando, perguntar interativamente
+    let finalBatches = concurrentBatches;
+    let finalRenderPreset = renderPreset;
+
+    if (concurrentBatches === undefined) {
+      finalBatches = await this.promptForBatches(rl, useFishAudio);
+    } else {
+      console.log(`⚙️  Batches configurados via linha de comando: ${concurrentBatches}`);
+    }
+    
+    if (renderPreset === undefined) {
+      finalRenderPreset = await this.promptForRenderPreset(rl);
+    } else {
+      console.log(`🎬 Preset de renderização configurado via linha de comando: ${renderPreset}`);
+    }
+
+    // Configurar quantidade de batches simultâneos
+    if (finalBatches !== undefined) {
+      this.ttsService.setConcurrentBatches(finalBatches);
+    }
+    
+    // Configurar preset de renderização
+    if (finalRenderPreset !== undefined) {
+      this.ttsService.setRenderPreset(finalRenderPreset);
+    }
+
+    console.log('\n=== Audio Gemini TTS Console ===');
     console.log('Digite o path do txt para converter em áudio (digite "exit" para sair):');
     console.log('Para múltiplos arquivos: separe os caminhos com vírgula');
     console.log('  Exemplo: "C:\\arquivo1.txt", "C:\\arquivo2.txt", "C:\\arquivo3.txt"');
     console.log('Para renderizar vídeo de uma pasta existente: RENDER "C:\\caminho\\da\\pasta"');
     console.log('Os arquivos de áudio serão salvos nas respectivas pastas');
+    console.log('');
+    console.log('💡 Dica: Você também pode configurar via linha de comando:');
+    console.log('  --batches=N          : Define quantidade de batches simultâneos');
+    console.log('  --render-preset=fast  : Renderização rápida');
+    console.log('  --fish-audio         : Usa Fish Audio');
     console.log('');
     
     let multilineMode = false;

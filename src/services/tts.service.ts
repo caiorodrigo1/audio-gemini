@@ -12,6 +12,7 @@ import { FishAudioService } from './fish-audio.service';
 import { VoiceSelectorService } from './voice-selector.service';
 import { ModelSelectorService } from './model-selector.service';
 import { AUDIO_CONFIG, BATCH_SIZES, TIMEOUTS, FILE_PATTERNS } from '../constants';
+import { RenderPreset, getRenderSettings } from '../config/render.config';
 
 
 @Injectable()
@@ -20,6 +21,8 @@ export class TTSService {
   private whiskToken: string;
   private consoleService: any;
   private useFishAudio: boolean = false;
+  private concurrentBatches?: number; // Quantidade de batches simultâneos configurada pelo usuário
+  private renderPreset: RenderPreset = 'standard'; // Preset de renderização (standard ou fast)
 
   constructor(
     private readonly whiskAuthService: WhiskAuthService,
@@ -36,6 +39,23 @@ export class TTSService {
 
   setConsoleService(consoleService: any) {
     this.consoleService = consoleService;
+  }
+
+  setConcurrentBatches(batches: number): void {
+    if (batches < 1) {
+      throw new Error('A quantidade de batches simultâneos deve ser maior que 0');
+    }
+    this.concurrentBatches = batches;
+    console.log(`⚙️  Configuração de batches simultâneos atualizada: ${batches}`);
+  }
+
+  setRenderPreset(preset: RenderPreset): void {
+    if (preset !== 'standard' && preset !== 'fast') {
+      throw new Error('O preset de renderização deve ser "standard" ou "fast"');
+    }
+    this.renderPreset = preset;
+    const settings = getRenderSettings(preset);
+    console.log(`⚙️  Preset de renderização configurado: ${preset} (preset: ${settings.preset}, tune: ${settings.tune})`);
   }
 
   async setUseFishAudio(useFishAudio: boolean) {
@@ -466,8 +486,16 @@ export class TTSService {
     const audioTimer = new Timer('Conversão de áudio');
     audioTimer.logStart();
 
-    // Ajustar batch size baseado no modo de áudio
-    const batchSize = this.useFishAudio ? BATCH_SIZES.AUDIO_PROCESSING_FISH : BATCH_SIZES.AUDIO_PROCESSING;
+    // Ajustar batch size baseado no modo de áudio ou usar valor configurado pelo usuário
+    let batchSize: number;
+    if (this.concurrentBatches !== undefined) {
+      // Usar valor configurado pelo usuário via --batches=N
+      batchSize = this.concurrentBatches;
+      audioTimer.log(`📦 Usando batch size configurado pelo usuário: ${batchSize}`);
+    } else {
+      // Usar valor padrão baseado no modo de áudio
+      batchSize = this.useFishAudio ? BATCH_SIZES.AUDIO_PROCESSING_FISH : BATCH_SIZES.AUDIO_PROCESSING;
+    }
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
       totalTimer.log(`[ÁUDIO] Processando bloco ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)...`);
@@ -1614,7 +1642,14 @@ Linux/Mac:
 ❗ Após a instalação, reinicie o terminal e tente novamente.`);
       }
 
-      console.log('🎬 Iniciando renderização do vídeo com FFmpeg...');
+      // Mostrar configuração de renderização
+      const renderSettings = getRenderSettings(this.renderPreset);
+      console.log('\n🎬 Iniciando renderização do vídeo com FFmpeg...');
+      console.log(`⚙️  Preset configurado: ${this.renderPreset}`);
+      console.log(`⚙️  NVENC Preset: ${renderSettings.preset}, Tune: ${renderSettings.tune}`);
+      if (this.renderPreset === 'fast') {
+        console.log(`⚡ Modo rápido ativado - renderização deve ser 2-3x mais rápida`);
+      }
 
       // Verificar se os arquivos de áudio e imagem existem
       const audioFiles = await this.getAudioFiles(outputDir);
@@ -1687,7 +1722,11 @@ Linux/Mac:
         
         // Criar segmento: imagem + áudio completo
         console.log(`🎬 Criando segmento completo...`);
-        const ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset p4 -tune hq -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        
+        // Obter configurações de renderização baseadas no preset configurado
+        const renderSettings = getRenderSettings(this.renderPreset);
+        console.log(`⚙️  Usando preset de renderização: ${this.renderPreset} (NVENC preset: ${renderSettings.preset}, tune: ${renderSettings.tune})`);
+        const ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset ${renderSettings.preset} -tune ${renderSettings.tune} -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
         
         try {
           await this.executeFFmpegWithRetry(ffmpegCommand, `segmento ${i + 1}`);
