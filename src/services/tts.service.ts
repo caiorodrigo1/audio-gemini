@@ -12,6 +12,7 @@ import { FishAudioService } from './fish-audio.service';
 import { VoiceSelectorService } from './voice-selector.service';
 import { ModelSelectorService } from './model-selector.service';
 import { AUDIO_CONFIG, BATCH_SIZES, TIMEOUTS, FILE_PATTERNS } from '../constants';
+import { RenderPreset, getRenderSettings } from '../config/render.config';
 
 
 @Injectable()
@@ -21,6 +22,7 @@ export class TTSService {
   private consoleService: any;
   private useFishAudio: boolean = false;
   private concurrentBatches?: number; // Quantidade de batches simultâneos configurada pelo usuário
+  private renderPreset: RenderPreset = 'standard'; // Preset de renderização (standard ou fast)
 
   constructor(
     private readonly whiskAuthService: WhiskAuthService,
@@ -45,6 +47,15 @@ export class TTSService {
     }
     this.concurrentBatches = batches;
     console.log(`⚙️  Configuração de batches simultâneos atualizada: ${batches}`);
+  }
+
+  setRenderPreset(preset: RenderPreset): void {
+    if (preset !== 'standard' && preset !== 'fast') {
+      throw new Error('O preset de renderização deve ser "standard" ou "fast"');
+    }
+    this.renderPreset = preset;
+    const settings = getRenderSettings(preset);
+    console.log(`⚙️  Preset de renderização configurado: ${preset} (preset: ${settings.preset}, tune: ${settings.tune})`);
   }
 
   async setUseFishAudio(useFishAudio: boolean) {
@@ -1631,7 +1642,14 @@ Linux/Mac:
 ❗ Após a instalação, reinicie o terminal e tente novamente.`);
       }
 
-      console.log('🎬 Iniciando renderização do vídeo com FFmpeg...');
+      // Mostrar configuração de renderização
+      const renderSettings = getRenderSettings(this.renderPreset);
+      console.log('\n🎬 Iniciando renderização do vídeo com FFmpeg...');
+      console.log(`⚙️  Preset configurado: ${this.renderPreset}`);
+      console.log(`⚙️  NVENC Preset: ${renderSettings.preset}, Tune: ${renderSettings.tune}`);
+      if (this.renderPreset === 'fast') {
+        console.log(`⚡ Modo rápido ativado - renderização deve ser 2-3x mais rápida`);
+      }
 
       // Verificar se os arquivos de áudio e imagem existem
       const audioFiles = await this.getAudioFiles(outputDir);
@@ -1704,7 +1722,11 @@ Linux/Mac:
         
         // Criar segmento: imagem + áudio completo
         console.log(`🎬 Criando segmento completo...`);
-        const ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset p4 -tune hq -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        
+        // Obter configurações de renderização baseadas no preset configurado
+        const renderSettings = getRenderSettings(this.renderPreset);
+        console.log(`⚙️  Usando preset de renderização: ${this.renderPreset} (NVENC preset: ${renderSettings.preset}, tune: ${renderSettings.tune})`);
+        const ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset ${renderSettings.preset} -tune ${renderSettings.tune} -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
         
         try {
           await this.executeFFmpegWithRetry(ffmpegCommand, `segmento ${i + 1}`);

@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConsoleService } from './services/console.service';
+import { RenderPreset } from './config/render.config';
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
@@ -13,6 +14,19 @@ async function bootstrap() {
   // Verificar se foi passado o parâmetro --batches=N
   const batchesArg = process.argv.find(arg => arg.startsWith('--batches='));
   const concurrentBatches = batchesArg ? parseInt(batchesArg.split('=')[1], 10) : undefined;
+  
+  // Verificar se foi passado o parâmetro --render-preset=standard|fast
+  const renderPresetArg = process.argv.find(arg => arg.startsWith('--render-preset='));
+  let renderPreset: RenderPreset | undefined = undefined;
+  if (renderPresetArg) {
+    const presetValue = renderPresetArg.split('=')[1];
+    if (presetValue === 'standard' || presetValue === 'fast') {
+      renderPreset = presetValue as RenderPreset;
+    } else {
+      console.error('❌ Valor inválido para --render-preset. Deve ser "standard" ou "fast".');
+      process.exit(1);
+    }
+  }
   
   if (useFishAudio) {
     console.log('🐟 Modo Fish Audio ativado - usando API alternativa para geração de áudio');
@@ -26,7 +40,11 @@ async function bootstrap() {
     console.log(`⚙️  Batches simultâneos configurados: ${concurrentBatches}`);
   }
   
-  await consoleService.start(useFishAudio, concurrentBatches);
+  if (renderPreset === 'fast') {
+    console.log('⚡ Modo de renderização rápida ativado (preset p1) - reduz tempo pela metade mantendo qualidade');
+  }
+  
+  await consoleService.start(useFishAudio, concurrentBatches, renderPreset);
 }
 
 bootstrap();
