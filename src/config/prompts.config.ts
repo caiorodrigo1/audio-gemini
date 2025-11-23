@@ -9,7 +9,7 @@ export interface PromptMapping {
 
 export const YT_CODE_MAPPING: PromptMapping = {
   'YT01': 11,            // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
-  'YT03': 6,             // Histórias milionários (PL)
+  // 'YT03': 6,             // Histórias milionários (PL)
   'YT04': 7,             // Histórias famílias (IT)
   'YT05': 8,             // Histórias milionários (RO)
   'YT06': 9,             // Bridgerton Brasileiro (PT-BR)

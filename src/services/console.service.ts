@@ -127,12 +127,17 @@ export class ConsoleService {
 
     console.log('\n=== Audio Gemini TTS Console ===');
     console.log('Digite o path do txt para converter em áudio (digite "exit" para sair):');
-    console.log('Para múltiplos arquivos: separe os caminhos com vírgula');
-    console.log('  Exemplo: "C:\\arquivo1.txt", "C:\\arquivo2.txt", "C:\\arquivo3.txt"');
-    console.log('Para renderizar vídeo de uma pasta existente: RENDER "C:\\caminho\\da\\pasta"');
+    console.log('');
+    console.log('📁 MODOS DE ENTRADA:');
+    console.log('1) Arquivo único: "C:\\caminho\\arquivo.txt"');
+    console.log('2) Múltiplos arquivos: "C:\\arquivo1.txt", "C:\\arquivo2.txt", "C:\\arquivo3.txt"');
+    console.log('3) 🆕 Pasta raiz automática: D:\\Canais Dark\\CanaisAtivos');
+    console.log('   → Escaneia automaticamente todas as pastas YT* e processa arquivos .txt');
+    console.log('');
+    console.log('🎬 Para renderizar vídeo: RENDER "C:\\caminho\\da\\pasta"');
     console.log('Os arquivos de áudio serão salvos nas respectivas pastas');
     console.log('');
-    console.log('💡 Dica: Você também pode configurar via linha de comando:');
+    console.log('💡 Configurações via linha de comando:');
     console.log('  --batches=N          : Define quantidade de batches simultâneos');
     console.log('  --render-preset=fast  : Renderização rápida');
     console.log('  --fish-audio         : Usa Fish Audio');
@@ -156,6 +161,18 @@ export class ConsoleService {
           await processRender(input);
           promptUser();
           return;
+        }
+
+        // Verificar se é uma pasta raiz (sem aspas e sem extensão .txt)
+        if (!input.includes('"') && !input.trim().endsWith('.txt') && input.trim().length > 0) {
+          // Verificar se parece ser um caminho de pasta válido
+          const trimmedInput = input.trim();
+          if (trimmedInput.includes('\\') || trimmedInput.includes('/') ||
+              trimmedInput.match(/^[A-Za-z]:/) || trimmedInput.startsWith('D:\\')) {
+            await processFolderAuto(trimmedInput);
+            promptUser();
+            return;
+          }
         }
 
         // Verificar se são arquivos (caminhos entre aspas OU extensão de arquivo)
@@ -247,9 +264,110 @@ export class ConsoleService {
       }
     };
 
+    const processFolderAuto = async (rootFolder: string) => {
+      try {
+        console.log(`\n🔍 Escaneando pasta raiz: ${rootFolder}`);
+
+        // Verificar se a pasta existe
+        const stats = await fs.stat(rootFolder);
+        if (!stats.isDirectory()) {
+          console.error(`❌ O caminho especificado não é uma pasta: ${rootFolder}`);
+          return;
+        }
+
+        // Encontrar todas as pastas que começam com YT
+        const ytFolders = await findYtFolders(rootFolder);
+        if (ytFolders.length === 0) {
+          console.error(`❌ Nenhuma pasta começando com "YT" encontrada em: ${rootFolder}`);
+          console.log('Certifique-se de que existem pastas como YT01, YT02, etc.');
+          return;
+        }
+
+        console.log(`📂 Encontradas ${ytFolders.length} pastas YT: ${ytFolders.map(f => path.basename(f)).join(', ')}`);
+
+        // Encontrar todos os arquivos txt dentro das pastas YT
+        const allTxtFiles: Array<{path: string, ytFolder: string, ytCode: string}> = [];
+
+        for (const ytFolder of ytFolders) {
+          const txtFiles = await findTxtFilesInFolder(ytFolder);
+          const ytCode = path.basename(ytFolder).substring(0, 4); // Extrair YT01, YT02, etc.
+
+          for (const txtFile of txtFiles) {
+            allTxtFiles.push({
+              path: txtFile,
+              ytFolder: ytFolder,
+              ytCode: ytCode
+            });
+          }
+        }
+
+        if (allTxtFiles.length === 0) {
+          console.error(`❌ Nenhum arquivo .txt encontrado nas pastas YT.`);
+          return;
+        }
+
+        console.log(`\n📄 Encontrados ${allTxtFiles.length} arquivo(s) txt para processamento:`);
+        allTxtFiles.forEach((file, index) => {
+          console.log(`  ${index + 1}. ${file.ytCode} - ${path.basename(file.path)}`);
+        });
+
+        console.log('\n🚀 Iniciando processamento automático...\n');
+
+        // Processar cada arquivo txt encontrado
+        for (let i = 0; i < allTxtFiles.length; i++) {
+          const file = allTxtFiles[i];
+          console.log(`\n=== PROCESSANDO ${file.ytCode} - ${path.basename(file.path)} ===`);
+          console.log(`📁 Pasta: ${path.basename(file.ytFolder)}`);
+
+          await processFile(file.path, i + 1, allTxtFiles.length);
+
+          // Pequeno delay entre arquivos
+          if (i < allTxtFiles.length - 1) {
+            console.log('\n⏳ Aguardando 3 segundos antes do próximo arquivo...');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+        }
+
+        console.log(`\n🎉 Processamento automático completo! ${allTxtFiles.length} arquivo(s) processado(s).`);
+
+      } catch (error) {
+        console.error('\n❌ Erro ao processar pasta automaticamente:', error.message);
+      }
+    };
+
+    const findYtFolders = async (rootFolder: string): Promise<string[]> => {
+      try {
+        const entries = await fs.readdir(rootFolder, { withFileTypes: true });
+        const ytFolders = entries
+          .filter(entry => entry.isDirectory() && entry.name.startsWith('YT'))
+          .map(entry => path.join(rootFolder, entry.name))
+          .sort(); // Ordenar alfabeticamente
+
+        return ytFolders;
+      } catch (error) {
+        console.error(`Erro ao listar pastas YT: ${error.message}`);
+        return [];
+      }
+    };
+
+    const findTxtFilesInFolder = async (folderPath: string): Promise<string[]> => {
+      try {
+        const entries = await fs.readdir(folderPath, { withFileTypes: true });
+        const txtFiles = entries
+          .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.txt'))
+          .map(entry => path.join(folderPath, entry.name))
+          .sort(); // Ordenar alfabeticamente
+
+        return txtFiles;
+      } catch (error) {
+        console.error(`Erro ao listar arquivos txt em ${folderPath}: ${error.message}`);
+        return [];
+      }
+    };
+
     const processFiles = async (input: string) => {
       const filePaths = parseFilePaths(input);
-      
+
       if (filePaths.length === 0) {
         console.error('\n❌ Nenhum caminho de arquivo válido encontrado.');
         console.log('Use aspas ao redor de cada caminho: "C:\\arquivo1.txt", "C:\\arquivo2.txt"');
@@ -258,19 +376,19 @@ export class ConsoleService {
       }
 
       console.log(`\n📁 ${filePaths.length} arquivo(s) detectado(s) para processamento...`);
-      
+
       for (let i = 0; i < filePaths.length; i++) {
         const filePath = filePaths[i];
         console.log(`\n=== PROCESSANDO ARQUIVO ${i + 1}/${filePaths.length} ===`);
         await processFile(filePath, i + 1, filePaths.length);
-        
+
         // Pequeno delay entre arquivos
         if (i < filePaths.length - 1) {
           console.log('\n⏳ Aguardando 3 segundos antes do próximo arquivo...');
           await new Promise(resolve => setTimeout(resolve, 3000));
         }
       }
-      
+
       console.log(`\n🎉 Processamento completo! ${filePaths.length} arquivo(s) processado(s).`);
     };
 
