@@ -23,6 +23,7 @@ export class TTSService {
   private useFishAudio: boolean = false;
   private concurrentBatches?: number; // Quantidade de batches simultâneos configurada pelo usuário
   private renderPreset: RenderPreset = 'standard'; // Preset de renderização (standard ou fast)
+  private detectedVideoEncoder: string = 'libx264'; // Encoder de vídeo detectado (NVIDIA/AMD/CPU)
 
   constructor(
     private readonly whiskAuthService: WhiskAuthService,
@@ -1522,6 +1523,36 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
     }
   }
 
+  private async detectBestVideoEncoder(): Promise<string> {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+
+    const encoders = [
+      { name: 'h264_nvenc', description: 'NVIDIA NVENC' },
+      { name: 'h264_amf', description: 'AMD AMF' },
+      { name: 'h264_vaapi', description: 'VAAPI (Intel/AMD)' },
+      { name: 'libx264', description: 'CPU (libx264)' }
+    ];
+
+    for (const encoder of encoders) {
+      try {
+        // Testar se o encoder está disponível
+        const testCommand = `ffmpeg -f lavfi -i testsrc=duration=0.1:size=320x240:rate=1 -c:v ${encoder.name} -f null -`;
+        await execAsync(testCommand, { timeout: 5000 }); // Timeout curto para teste rápido
+
+        console.log(`✅ Encoder encontrado: ${encoder.description} (${encoder.name})`);
+        return encoder.name;
+      } catch (error) {
+        console.log(`⚠️ Encoder não disponível: ${encoder.description} (${encoder.name})`);
+      }
+    }
+
+    // Fallback final - sempre deve funcionar
+    console.log('⚠️ Nenhum encoder otimizado encontrado. Usando CPU (libx264).');
+    return 'libx264';
+  }
+
   private generateUUID(): string {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0;
@@ -1579,9 +1610,9 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
         await execAsync('ffmpeg -version', { maxBuffer: 1024 * 1024 * 5 }); // 5MB buffer
       } catch (error) {
         throw new Error(`FFmpeg não encontrado. Por favor, instale o FFmpeg:
-        
+
 📥 INSTALAÇÃO DO FFMPEG:
-Windows: 
+Windows:
 1. Baixe de: https://ffmpeg.org/download.html#build-windows
 2. Extraia e adicione ao PATH do sistema
 3. Ou use: winget install FFmpeg
@@ -1593,6 +1624,11 @@ Linux/Mac:
 
 ❗ Após a instalação, reinicie o terminal e tente novamente.`);
       }
+
+      // Detectar melhor encoder de vídeo disponível
+      console.log('🔍 Detectando encoder de vídeo disponível...');
+      this.detectedVideoEncoder = await this.detectBestVideoEncoder();
+      console.log(`🎬 Usando encoder: ${this.detectedVideoEncoder}`);
 
       // Mostrar configuração de renderização
       const renderSettings = getRenderSettings(this.renderPreset);
@@ -1677,8 +1713,23 @@ Linux/Mac:
         
         // Obter configurações de renderização baseadas no preset configurado
         const renderSettings = getRenderSettings(this.renderPreset);
-        console.log(`⚙️  Usando preset de renderização: ${this.renderPreset} (NVENC preset: ${renderSettings.preset}, tune: ${renderSettings.tune})`);
-        const ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset ${renderSettings.preset} -tune ${renderSettings.tune} -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        console.log(`⚙️  Usando preset de renderização: ${this.renderPreset} (Encoder: ${this.detectedVideoEncoder}, preset: ${renderSettings.preset}, tune: ${renderSettings.tune})`);
+
+        // Usar encoder detectado (NVENC, AMF, VAAPI ou CPU)
+        let ffmpegCommand: string;
+        if (this.detectedVideoEncoder === 'h264_nvenc') {
+          // NVIDIA NVENC
+          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset ${renderSettings.preset} -tune ${renderSettings.tune} -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        } else if (this.detectedVideoEncoder === 'h264_amf') {
+          // AMD AMF
+          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_amf -usage transcoding -quality speed -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        } else if (this.detectedVideoEncoder === 'h264_vaapi') {
+          // VAAPI (Intel/AMD)
+          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_vaapi -qp 23 -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        } else {
+          // CPU (libx264) - fallback
+          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v libx264 -preset ${renderSettings.preset === 'p1' ? 'ultrafast' : 'fast'} -crf 23 -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        }
         
         try {
           await this.executeFFmpegWithRetry(ffmpegCommand, `segmento ${i + 1}`);
