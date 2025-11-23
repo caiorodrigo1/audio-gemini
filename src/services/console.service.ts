@@ -31,86 +31,153 @@ export class ConsoleService {
     });
   }
 
-  async promptForBatches(rl: readline.Interface, useFishAudio: boolean): Promise<number | undefined> {
+
+  async promptForModeSelection(rl: readline.Interface, defaultPath: string): Promise<boolean> {
     return new Promise((resolve) => {
-      const defaultBatch = useFishAudio ? 1 : 5;
-      console.log('\n⚙️  CONFIGURAÇÃO DE BATCHES SIMULTÂNEOS');
-      console.log(`Quantos batches simultâneos de áudio deseja usar?`);
-      console.log(`   Padrão: ${defaultBatch} (pressione Enter para usar o padrão)`);
-      console.log(`   Recomendado: ${useFishAudio ? '1-2' : '3-8'} batches`);
-      console.log(`   Digite um número ou pressione Enter para padrão:`);
-      
-      rl.question('Batches: ', (answer: string) => {
-        const trimmed = answer.trim();
-        if (!trimmed) {
-          console.log(`✅ Usando valor padrão: ${defaultBatch} batches`);
-          resolve(undefined); // Usará o padrão
+      const options = [
+        {
+          label: `🏠 Modo Padrão - CanaisAtivos: ${defaultPath}`,
+          description: '   → Escaneia automaticamente todas as pastas YT* e processa arquivos .txt',
+          value: true
+        },
+        {
+          label: '🔧 Modo Personalizado - Digitar caminho manualmente',
+          description: '   → Permite especificar qualquer pasta raiz',
+          value: false
+        }
+      ];
+
+      let selectedIndex = 0;
+      let isFirstRender = true;
+
+      const renderMenu = () => {
+        console.clear();
+
+        console.log('\n🚀 AUDIO GEMINI TTS - MODO AUTOMÁTICO');
+        console.log('=====================================');
+        console.log('');
+        console.log('📁 MODOS DISPONÍVEIS:');
+        console.log('');
+        console.log('💡 O sistema irá:');
+        console.log('   • Encontrar todas as pastas YT, YT01, YT02, etc.');
+        console.log('   • Processar todos os arquivos .txt dentro delas');
+        console.log('   • Detectar automaticamente o estilo correto (vampiros, famílias, etc.)');
+        console.log('   • Gerar áudio + imagens + thumbnails para cada arquivo');
+        console.log('');
+
+        options.forEach((option, index) => {
+          const pointer = index === selectedIndex ? '👉 ' : '   ';
+          console.log(`${pointer}${option.label}`);
+          console.log(`${option.description}`);
+          console.log('');
+        });
+
+        console.log('Use ↑↓ para navegar, ENTER para selecionar, ESC para sair');
+      };
+
+      const handleKeyPress = (key: Buffer) => {
+        const keyStr = key.toString();
+        if (keyStr === '\u001b[A') { // Seta para cima
+          selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : options.length - 1;
+          renderMenu();
+        } else if (keyStr === '\u001b[B') { // Seta para baixo
+          selectedIndex = selectedIndex < options.length - 1 ? selectedIndex + 1 : 0;
+          renderMenu();
+        } else if (keyStr === '\r' || keyStr === '\n') { // Enter
+          const selectedOption = options[selectedIndex];
+          console.log(`\n✅ Selecionado: ${selectedOption.label.split(' - ')[0]}`);
+          process.stdin.setRawMode(false);
+          process.stdin.removeListener('data', handleKeyPress);
+          resolve(selectedOption.value);
+        } else if (keyStr === '\u001b') { // ESC
+          console.log('\n⚠️  Saindo... Usando modo padrão.');
+          process.stdin.setRawMode(false);
+          process.stdin.removeListener('data', handleKeyPress);
+          resolve(true);
+        }
+      };
+
+      // Configurar modo raw para capturar setas
+      process.stdin.setRawMode(true);
+      process.stdin.on('data', handleKeyPress);
+
+      // Renderizar menu inicial
+      renderMenu();
+
+      // Timeout de segurança (5 minutos)
+      setTimeout(() => {
+        console.log('\n⏰ Timeout - Usando modo padrão.');
+        process.stdin.setRawMode(false);
+        process.stdin.removeListener('data', handleKeyPress);
+        resolve(true);
+      }, 300000); // 5 minutos
+    });
+  }
+
+  async promptForCustomPath(rl: readline.Interface): Promise<string> {
+    return new Promise((resolve) => {
+      console.log('\n🔧 MODO PERSONALIZADO');
+      console.log('Digite o caminho completo da pasta raiz CanaisAtivos:');
+      console.log('Exemplo: D:\\Meus Canais\\Ativos');
+      console.log('');
+
+      rl.question('Caminho da pasta: ', (path: string) => {
+        const trimmedPath = path.trim();
+        if (!trimmedPath) {
+          console.log('⚠️  Caminho vazio. Usando caminho padrão.');
+          resolve('D:\\Canais Dark\\CanaisAtivos');
           return;
         }
-        
-        const batches = parseInt(trimmed, 10);
-        if (isNaN(batches) || batches < 1) {
-          console.log(`⚠️  Valor inválido. Usando padrão: ${defaultBatch} batches`);
-          resolve(undefined);
-          return;
-        }
-        
-        console.log(`✅ Configurado: ${batches} batches simultâneos`);
-        resolve(batches);
+
+        resolve(trimmedPath);
       });
     });
   }
 
-  async promptForRenderPreset(rl: readline.Interface): Promise<RenderPreset> {
-    return new Promise((resolve) => {
-      console.log('\n🎬 CONFIGURAÇÃO DE QUALIDADE DE RENDERIZAÇÃO');
-      console.log('Qual preset de renderização deseja usar?');
-      console.log('   1) Standard (padrão) - Preset p4, tune hq, alta qualidade');
-      console.log('   2) Fast - Preset p1, tune ll, renderização 2-3x mais rápida');
-      console.log('   Digite 1 ou 2 (padrão: 1):');
-      
-      rl.question('Preset: ', (answer: string) => {
-        const trimmed = answer.trim().toLowerCase();
-        if (!trimmed || trimmed === '1') {
-          console.log('✅ Usando preset: Standard (p4, hq)');
-          resolve('standard');
-          return;
-        }
-        
-        if (trimmed === '2') {
-          console.log('✅ Usando preset: Fast (p1, ll) - renderização otimizada para velocidade');
-          resolve('fast');
-          return;
-        }
-        
-        console.log('⚠️  Opção inválida. Usando padrão: Standard');
-        resolve('standard');
-      });
-    });
-  }
 
   async start(useFishAudio: boolean = false, concurrentBatches?: number, renderPreset?: RenderPreset): Promise<void> {
     // Conectar o TTS service com este console service e informar se deve usar Fish Audio
     this.ttsService.setConsoleService(this);
     await this.ttsService.setUseFishAudio(useFishAudio);
-    
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
     });
 
-    // Se não foram passados via linha de comando, perguntar interativamente
+    // Perguntar se quer usar o modo padrão ou personalizado
+    const defaultPath = 'D:\\Canais Dark\\CanaisAtivos';
+    const useDefault = await this.promptForModeSelection(rl, defaultPath);
+
+    let selectedPath: string;
+    if (useDefault) {
+      selectedPath = defaultPath;
+      console.log(`\n✅ Usando caminho padrão: ${selectedPath}`);
+    } else {
+      selectedPath = await this.promptForCustomPath(rl);
+      console.log(`\n✅ Usando caminho personalizado: ${selectedPath}`);
+    }
+
+    // Detectar automaticamente o número máximo de batches baseado nas API keys disponíveis
     let finalBatches = concurrentBatches;
     let finalRenderPreset = renderPreset;
 
     if (concurrentBatches === undefined) {
-      finalBatches = await this.promptForBatches(rl, useFishAudio);
+      // Detectar automaticamente quantas API keys estão configuradas
+      const apiKeysCount = this.ttsService.getApiKeysCount();
+      finalBatches = apiKeysCount;
+
+      console.log(`🔑 API keys detectadas: ${apiKeysCount}`);
+      console.log(`⚙️  Batches simultâneos configurados automaticamente: ${finalBatches}`);
+      console.log(`💡 Cada batch usará uma API key diferente para processamento paralelo`);
     } else {
       console.log(`⚙️  Batches configurados via linha de comando: ${concurrentBatches}`);
     }
-    
+
     if (renderPreset === undefined) {
-      finalRenderPreset = await this.promptForRenderPreset(rl);
+      // Usar automaticamente o preset fast (opção 2) para velocidade otimizada
+      finalRenderPreset = 'fast';
+      console.log(`🎬 Preset de renderização configurado automaticamente: Fast (p1, ll) - 2-3x mais rápido`);
     } else {
       console.log(`🎬 Preset de renderização configurado via linha de comando: ${renderPreset}`);
     }
@@ -119,160 +186,129 @@ export class ConsoleService {
     if (finalBatches !== undefined) {
       this.ttsService.setConcurrentBatches(finalBatches);
     }
-    
+
     // Configurar preset de renderização
     if (finalRenderPreset !== undefined) {
       this.ttsService.setRenderPreset(finalRenderPreset);
     }
 
     console.log('\n=== Audio Gemini TTS Console ===');
-    console.log('Digite o path do txt para converter em áudio (digite "exit" para sair):');
-    console.log('Para múltiplos arquivos: separe os caminhos com vírgula');
-    console.log('  Exemplo: "C:\\arquivo1.txt", "C:\\arquivo2.txt", "C:\\arquivo3.txt"');
-    console.log('Para renderizar vídeo de uma pasta existente: RENDER "C:\\caminho\\da\\pasta"');
-    console.log('Os arquivos de áudio serão salvos nas respectivas pastas');
+    console.log(`📁 Caminho selecionado: ${selectedPath}`);
+    console.log('Escaneando automaticamente todas as pastas YT* e processando arquivos .txt...');
     console.log('');
-    console.log('💡 Dica: Você também pode configurar via linha de comando:');
-    console.log('  --batches=N          : Define quantidade de batches simultâneos');
-    console.log('  --render-preset=fast  : Renderização rápida');
-    console.log('  --fish-audio         : Usa Fish Audio');
+    console.log('💡 Comandos disponíveis:');
+    console.log('  exit    : Sair da aplicação');
+    console.log('  RENDER "C:\\caminho\\da\\pasta" : Renderizar vídeo de uma pasta específica');
+    console.log('');
+    console.log('💡 Configurações ativas:');
+    console.log(`  • Fish Audio: ${useFishAudio ? 'Ativado' : 'Desativado'}`);
+    console.log(`  • API Keys disponíveis: ${this.ttsService.getApiKeysCount()}`);
+    console.log(`  • Batches simultâneos: ${finalBatches || (useFishAudio ? 1 : this.ttsService.getApiKeysCount())}`);
+    console.log(`  • Preset de renderização: ${finalRenderPreset || 'standard'}`);
     console.log('');
     
-    let multilineMode = false;
-    let multilineText = '';
 
-    const promptUser = () => {
-      const prompt = multilineMode ? 'Continue (ou digite "END" para finalizar): ' : 'Digite o texto: ';
-      
-      rl.question(prompt, async (input: string) => {
-        if (input.toLowerCase() === 'exit') {
-          console.log('Até logo!');
-          rl.close();
-          return;
-        }
-
-        // Verificar se é comando RENDER
-        if (input.trim().toUpperCase().startsWith('RENDER')) {
-          await processRender(input);
-          promptUser();
-          return;
-        }
-
-        // Verificar se são arquivos (caminhos entre aspas OU extensão de arquivo)
-        if (input.includes('"') || input.trim().endsWith('.txt')) {
-          if (!input.includes('"')) {
-            // Se é um arquivo sem aspas, processar diretamente
-            await processFile(input.trim());
-          } else {
-            await processFiles(input);
-          }
-          promptUser();
-          return;
-        }
-
-        // Verificar se está iniciando modo multiline (texto longo)
-        if (!multilineMode && input.length > 1000) {
-          multilineMode = true;
-          multilineText = input;
-          promptUser();
-          return;
-        }
-
-        // Verificar se está finalizando modo multiline
-        if (multilineMode && input.trim().toLowerCase() === 'end') {
-          multilineMode = false;
-          const finalText = multilineText;
-          multilineText = '';
-          
-          await processText(finalText);
-          promptUser();
-          return;
-        }
-
-        // Adicionar ao texto multiline
-        if (multilineMode) {
-          multilineText += '\n' + input;
-          promptUser();
-          return;
-        }
-
-        // Processar texto normal
-        if (!input.trim()) {
-          console.log('Por favor, digite um texto válido.');
-          promptUser();
-          return;
-        }
-
-        await processText(input);
-        promptUser();
-      });
-    };
-
-    const parseFilePaths = (input: string): string[] => {
-      // Extrair todos os caminhos entre aspas
-      const pathRegex = /"([^"]+)"/g;
-      const paths: string[] = [];
-      let match;
-      
-      while ((match = pathRegex.exec(input)) !== null) {
-        paths.push(match[1]);
-      }
-      
-      return paths;
-    };
-
-    const processRender = async (input: string) => {
+    const processFolderAuto = async (rootFolder: string) => {
       try {
-        // Extrair o caminho da pasta do comando RENDER
-        const match = input.match(/RENDER\s+"([^"]+)"/i);
-        if (!match) {
-          console.error('\n❌ Formato inválido para comando RENDER.');
-          console.log('Use: RENDER "C:\\caminho\\da\\pasta"');
-          console.log('');
+        console.log(`\n🔍 Escaneando pasta raiz: ${rootFolder}`);
+
+        // Verificar se a pasta existe
+        const stats = await fs.stat(rootFolder);
+        if (!stats.isDirectory()) {
+          console.error(`❌ O caminho especificado não é uma pasta: ${rootFolder}`);
           return;
         }
-        
-        const folderPath = match[1];
-        console.log(`\n🎬 Tentando renderizar vídeo da pasta: ${folderPath}`);
-        
-        const videoPath = await this.ttsService.retryVideoRendering(folderPath);
-        
-        console.log(`\n✅ Vídeo renderizado com sucesso!`);
-        console.log(`📹 Arquivo: ${videoPath}`);
-        console.log('');
-        
-      } catch (error) {
-        console.error('\n❌ Erro ao renderizar vídeo:', error.message);
-        console.log('');
-      }
-    };
 
-    const processFiles = async (input: string) => {
-      const filePaths = parseFilePaths(input);
-      
-      if (filePaths.length === 0) {
-        console.error('\n❌ Nenhum caminho de arquivo válido encontrado.');
-        console.log('Use aspas ao redor de cada caminho: "C:\\arquivo1.txt", "C:\\arquivo2.txt"');
-        console.log('');
-        return;
-      }
-
-      console.log(`\n📁 ${filePaths.length} arquivo(s) detectado(s) para processamento...`);
-      
-      for (let i = 0; i < filePaths.length; i++) {
-        const filePath = filePaths[i];
-        console.log(`\n=== PROCESSANDO ARQUIVO ${i + 1}/${filePaths.length} ===`);
-        await processFile(filePath, i + 1, filePaths.length);
-        
-        // Pequeno delay entre arquivos
-        if (i < filePaths.length - 1) {
-          console.log('\n⏳ Aguardando 3 segundos antes do próximo arquivo...');
-          await new Promise(resolve => setTimeout(resolve, 3000));
+        // Encontrar todas as pastas que começam com YT
+        const ytFolders = await findYtFolders(rootFolder);
+        if (ytFolders.length === 0) {
+          console.error(`❌ Nenhuma pasta começando com "YT" encontrada em: ${rootFolder}`);
+          console.log('Certifique-se de que existem pastas como YT01, YT02, etc.');
+          return;
         }
+
+        console.log(`📂 Encontradas ${ytFolders.length} pastas YT: ${ytFolders.map(f => path.basename(f)).join(', ')}`);
+
+        // Encontrar todos os arquivos txt dentro das pastas YT
+        const allTxtFiles: Array<{path: string, ytFolder: string, ytCode: string}> = [];
+
+        for (const ytFolder of ytFolders) {
+          const txtFiles = await findTxtFilesInFolder(ytFolder);
+          const ytCode = path.basename(ytFolder).substring(0, 4); // Extrair YT01, YT02, etc.
+
+          for (const txtFile of txtFiles) {
+            allTxtFiles.push({
+              path: txtFile,
+              ytFolder: ytFolder,
+              ytCode: ytCode
+            });
+          }
+        }
+
+        if (allTxtFiles.length === 0) {
+          console.error(`❌ Nenhum arquivo .txt encontrado nas pastas YT.`);
+          return;
+        }
+
+        console.log(`\n📄 Encontrados ${allTxtFiles.length} arquivo(s) txt para processamento:`);
+        allTxtFiles.forEach((file, index) => {
+          console.log(`  ${index + 1}. ${file.ytCode} - ${path.basename(file.path)}`);
+        });
+
+        console.log('\n🚀 Iniciando processamento automático...\n');
+
+        // Processar cada arquivo txt encontrado
+        for (let i = 0; i < allTxtFiles.length; i++) {
+          const file = allTxtFiles[i];
+          console.log(`\n=== PROCESSANDO ${file.ytCode} - ${path.basename(file.path)} ===`);
+          console.log(`📁 Pasta: ${path.basename(file.ytFolder)}`);
+
+          await processFile(file.path, i + 1, allTxtFiles.length);
+
+          // Pequeno delay entre arquivos
+          if (i < allTxtFiles.length - 1) {
+            console.log('\n⏳ Aguardando 3 segundos antes do próximo arquivo...');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+        }
+
+        console.log(`\n🎉 Processamento automático completo! ${allTxtFiles.length} arquivo(s) processado(s).`);
+
+      } catch (error) {
+        console.error('\n❌ Erro ao processar pasta automaticamente:', error.message);
       }
-      
-      console.log(`\n🎉 Processamento completo! ${filePaths.length} arquivo(s) processado(s).`);
     };
+
+    const findYtFolders = async (rootFolder: string): Promise<string[]> => {
+      try {
+        const entries = await fs.readdir(rootFolder, { withFileTypes: true });
+        const ytFolders = entries
+          .filter(entry => entry.isDirectory() && entry.name.startsWith('YT'))
+          .map(entry => path.join(rootFolder, entry.name))
+          .sort(); // Ordenar alfabeticamente
+
+        return ytFolders;
+      } catch (error) {
+        console.error(`Erro ao listar pastas YT: ${error.message}`);
+        return [];
+      }
+    };
+
+    const findTxtFilesInFolder = async (folderPath: string): Promise<string[]> => {
+      try {
+        const entries = await fs.readdir(folderPath, { withFileTypes: true });
+        const txtFiles = entries
+          .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.txt'))
+          .map(entry => path.join(folderPath, entry.name))
+          .sort(); // Ordenar alfabeticamente
+
+        return txtFiles;
+      } catch (error) {
+        console.error(`Erro ao listar arquivos txt em ${folderPath}: ${error.message}`);
+        return [];
+      }
+    };
+
 
     const processFile = async (filePath: string, fileNumber?: number, totalFiles?: number) => {
       try {
@@ -367,6 +403,19 @@ export class ConsoleService {
       }
     };
 
-    promptUser();
+    // Iniciar processamento automático imediatamente
+    try {
+      await processFolderAuto(selectedPath);
+      console.log('\n🎉 TODOS OS ARQUIVOS FORAM PROCESSADOS COM SUCESSO!');
+      console.log('\n💡 DICAS:');
+      console.log('• Use RENDER para renderizar vídeos das pastas criadas');
+      console.log('• Verifique as pastas geradas para ver os arquivos criados');
+      console.log('• Execute novamente o programa para processar novos arquivos');
+    } catch (error) {
+      console.error('\n❌ ERRO NO PROCESSAMENTO:', error.message);
+    }
+
+    // Fechar interface readline
+    rl.close();
   }
 }

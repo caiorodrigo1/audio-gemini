@@ -23,6 +23,7 @@ export class TTSService {
   private useFishAudio: boolean = false;
   private concurrentBatches?: number; // Quantidade de batches simultâneos configurada pelo usuário
   private renderPreset: RenderPreset = 'standard'; // Preset de renderização (standard ou fast)
+  private detectedVideoEncoder: string = 'libx264'; // Encoder de vídeo detectado (NVIDIA/AMD/CPU)
 
   constructor(
     private readonly whiskAuthService: WhiskAuthService,
@@ -200,8 +201,12 @@ export class TTSService {
     return promptNames[promptType] || `Tipo ${promptType}`;
   }
   
-  private get apiKeys(): string[] {
+  private   get apiKeys(): string[] {
     return this.config.googleApiKeys;
+  }
+
+  getApiKeysCount(): number {
+    return this.config.googleApiKeys.length;
   }
 
   splitTextIntoChunks(text: string): TextChunk[] {
@@ -1066,8 +1071,8 @@ Data de criação: ${new Date().toLocaleString('pt-BR')}
 
       // Delay entre imagens para evitar rate limiting
       if (i < prompts.length - 1) {
-        imageGenTimer.log(`⏳ Aguardando 3s antes da próxima imagem...`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        imageGenTimer.log(`⏳ Aguardando 1.5s antes da próxima imagem...`);
+        await new Promise(resolve => setTimeout(resolve, 1500));
       }
     }
 
@@ -1341,32 +1346,35 @@ PROMPT CORRIGIDO:`;
 
   async generateThumbnails(cleanTitle: string, outputDir: string, promptType: number, count: number = 5): Promise<void> {
     console.log(`🎯 Criando ${count} thumbnails para: "${cleanTitle}"`);
-    
+
+    // Gerar apenas 1 prompt baseado no título
+    console.log(`🎨 Gerando prompt único baseado no título...`);
+    const thumbnailPrompt = await this.generateSingleThumbnailPrompt(cleanTitle, promptType);
+
+    console.log(`📝 Prompt gerado: ${thumbnailPrompt.substring(0, 100)}...`);
+
     let successfulThumbnails = 0;
     let failedThumbnails = 0;
 
     for (let i = 1; i <= count; i++) {
       try {
-        console.log(`🎨 Gerando thumbnail ${i}/${count}...`);
-        
-        // Gerar prompt de thumbnail baseado no título e tipo de prompt com variação
-        const thumbnailPrompt = await this.generateThumbnailPrompt(cleanTitle, promptType, i);
-        
-        // Gerar imagem com Whisk
+        console.log(`🎨 Gerando thumbnail ${i}/${count} com o mesmo prompt...`);
+
+        // Usar o mesmo prompt para todas as 5 thumbnails
         const imageBuffer = await this.callWhiskAPI(thumbnailPrompt);
-        
+
         // Salvar thumbnail com nome do título numerado
         await this.saveThumbnail(imageBuffer, `${cleanTitle}_thumb${i}`, outputDir);
-        
+
         console.log(`✅ Thumbnail ${i} gerada com sucesso: ${cleanTitle}_thumb${i}.jpg`);
         successfulThumbnails++;
-        
+
         // Delay entre thumbnails para evitar rate limiting
         if (i < count) {
-          console.log(`⏳ Aguardando 3s antes da próxima thumbnail...`);
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          console.log(`⏳ Aguardando 1.5s antes da próxima thumbnail...`);
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
-        
+
       } catch (error) {
         console.error(`❌ Erro ao gerar thumbnail ${i} para "${cleanTitle}":`, error.message);
         failedThumbnails++;
@@ -1382,70 +1390,28 @@ PROMPT CORRIGIDO:`;
   async generateThumbnail(cleanTitle: string, outputDir: string, promptType: number): Promise<void> {
     try {
       console.log(`🎯 Criando thumbnail para: "${cleanTitle}"`);
-      
-      // Gerar prompt de thumbnail baseado no título e tipo de prompt
-      const thumbnailPrompt = await this.generateThumbnailPrompt(cleanTitle, promptType);
-      
+
+      // Gerar prompt único baseado no título
+      const thumbnailPrompt = await this.generateSingleThumbnailPrompt(cleanTitle, promptType);
+
       // Gerar imagem com Whisk
       const imageBuffer = await this.callWhiskAPI(thumbnailPrompt);
-      
+
       // Salvar thumbnail com nome do título
       await this.saveThumbnail(imageBuffer, cleanTitle, outputDir);
-      
+
       console.log(`✅ Thumbnail gerada com sucesso: ${cleanTitle}.jpg`);
-      
+
     } catch (error) {
       console.error(`❌ Erro ao gerar thumbnail para "${cleanTitle}":`, error.message);
     }
   }
 
-  async generateThumbnailPrompt(cleanTitle: string, promptType: number, variation: number = 1): Promise<string> {
+  async generateSingleThumbnailPrompt(cleanTitle: string, promptType: number): Promise<string> {
     const specializedPrompt = this.getSpecializedPrompt(promptType);
-    
-    // Definir variações de composição e foco baseado no número da thumbnail
-    const variations = [
-      {
-        focus: "CLOSE-UP DRAMÁTICO",
-        composition: "primeiro plano extremo com 80% do quadro ocupado pelo rosto expressivo",
-        emotion: "expressão facial intensa e dramática",
-        lighting: "iluminação lateral dramática criando sombras marcantes",
-        angle: "ângulo frontal direto"
-      },
-      {
-        focus: "PLANO MÉDIO DINÂMICO", 
-        composition: "personagem principal ocupando 60% do quadro em ação",
-        emotion: "expressão de determinação e movimento",
-        lighting: "iluminação cinematográfica com contraluz",
-        angle: "ângulo de 3/4 mostrando perfil dinâmico"
-      },
-      {
-        focus: "COMPOSIÇÃO TRIANGULAR",
-        composition: "múltiplos elementos formando triângulo visual",
-        emotion: "contraste emocional entre personagens ou elementos",
-        lighting: "três pontos de luz criando profundidade",
-        angle: "ângulo elevado mostrando hierarquia visual"
-      },
-      {
-        focus: "PLANO AMERICANO IMPACTANTE",
-        composition: "personagem da cintura para cima ocupando 70% do quadro", 
-        emotion: "expressão de conflito interno e tensão",
-        lighting: "iluminação natural dramática vinda de janela",
-        angle: "ângulo ligeiramente baixo criando imponência"
-      },
-      {
-        focus: "ENQUADRAMENTO SIMÉTRICO",
-        composition: "composição centralizada e equilibrada",
-        emotion: "expressão serena mas misteriosa",
-        lighting: "iluminação difusa e uniforme",
-        angle: "ângulo frontal perfeitamente centralizado"
-      }
-    ];
-
-    const selectedVariation = variations[(variation - 1) % variations.length];
 
     const prompt = `TÍTULO DA HISTÓRIA: "${cleanTitle}"
 ESTILO: ${this.getPromptStyleName(promptType)}
-VARIAÇÃO: Thumbnail ${variation}/5 - ${selectedVariation.focus}
 
 Crie um prompt FOTORREALISTA de thumbnail baseado DIRETAMENTE na cena específica do título fornecido.
 
@@ -1464,21 +1430,12 @@ FOCO NA CENA ESPECÍFICA DO TÍTULO:
 4. Use DETALHES ESPECÍFICOS do contexto cultural/temporal do tipo de história
 5. PERSONALIZE baseado no que o título sugere (não use cenas genéricas)
 
-COMPOSIÇÃO ESPECÍFICA PARA ESTA VARIAÇÃO:
-- TIPO: ${selectedVariation.focus}
-- COMPOSIÇÃO: ${selectedVariation.composition}
-- EMOÇÃO: ${selectedVariation.emotion}  
-- ILUMINAÇÃO: ${selectedVariation.lighting}
-- ÂNGULO: ${selectedVariation.angle}
-
 DETALHES TÉCNICOS OBRIGATÓRIOS:
 - "professional photography equipment, Phase One XF IQ4, Schneider Kreuznach lens"
 - "realistic facial expressions with micro-expressions, authentic human emotions"
 - "natural lighting setup with key light, fill light, rim light"
 - "sharp focus on eyes, shallow depth of field background blur"
 - "color temperature 5600K, professional color correction"
-
-IMPORTANTE: Esta é a thumbnail ${variation} de 5. Crie uma composição ÚNICA e DIFERENTE das outras variações, mas sempre focada no título específico.
 
 Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma linha completa e detalhada.`;
 
@@ -1523,7 +1480,7 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
       // Usa 'increase' com crop mínimo para eliminar bordas pretas
       const ffmpegCommand = `ffmpeg -y -v error -i "${originalPath}" -vf "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080" -q:v 2 "${upscaledPath}"`;
       
-      await execAsync(ffmpegCommand, { maxBuffer: 1024 * 1024 * 5, timeout: 30000 });
+      await execAsync(ffmpegCommand, { maxBuffer: 1024 * 1024 * 5, timeout: 0 });
       
       upscaleTimer.log(`✅ Imagem ${imageIndex + 1} upscaled para 1920x1080: ${upscaledFileName}`);
       
@@ -1554,7 +1511,7 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
       // Comando FFmpeg: Scale com zoom ligeiro para preencher 1920x1080 sem padding
       const ffmpegCommand = `ffmpeg -y -v error -i "${originalPath}" -vf "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080" -q:v 2 "${upscaledPath}"`;
       
-      await execAsync(ffmpegCommand, { maxBuffer: 1024 * 1024 * 5, timeout: 30000 });
+      await execAsync(ffmpegCommand, { maxBuffer: 1024 * 1024 * 5, timeout: 0 });
       
       console.log(`✅ Thumbnail "${cleanTitle}" upscaled para 1920x1080: ${upscaledFileName}`);
       
@@ -1568,6 +1525,36 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
       console.error(`❌ Erro ao fazer upscaling da thumbnail "${cleanTitle}":`, error.message);
       console.log(`⚠️ Mantendo thumbnail original`);
     }
+  }
+
+  private async detectBestVideoEncoder(): Promise<string> {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+
+    const encoders = [
+      { name: 'h264_nvenc', description: 'NVIDIA NVENC' },
+      { name: 'h264_amf', description: 'AMD AMF' },
+      { name: 'h264_vaapi', description: 'VAAPI (Intel/AMD)' },
+      { name: 'libx264', description: 'CPU (libx264)' }
+    ];
+
+    for (const encoder of encoders) {
+      try {
+        // Testar se o encoder está disponível
+        const testCommand = `ffmpeg -f lavfi -i testsrc=duration=0.1:size=320x240:rate=1 -c:v ${encoder.name} -f null -`;
+        await execAsync(testCommand, { timeout: 5000 }); // Timeout curto para teste rápido
+
+        console.log(`✅ Encoder encontrado: ${encoder.description} (${encoder.name})`);
+        return encoder.name;
+      } catch (error) {
+        console.log(`⚠️ Encoder não disponível: ${encoder.description} (${encoder.name})`);
+      }
+    }
+
+    // Fallback final - sempre deve funcionar
+    console.log('⚠️ Nenhum encoder otimizado encontrado. Usando CPU (libx264).');
+    return 'libx264';
   }
 
   private generateUUID(): string {
@@ -1594,7 +1581,7 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
           await new Promise(resolve => setTimeout(resolve, delay));
         }
         
-        await execAsync(command, { maxBuffer: 1024 * 1024 * 10, timeout: 60000 });
+        await execAsync(command, { maxBuffer: 1024 * 1024 * 10, timeout: 0 });
         
         if (attempt > 0) {
           console.log(`✅ ${description} sucesso no retry ${attempt + 1}!`);
@@ -1627,9 +1614,9 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
         await execAsync('ffmpeg -version', { maxBuffer: 1024 * 1024 * 5 }); // 5MB buffer
       } catch (error) {
         throw new Error(`FFmpeg não encontrado. Por favor, instale o FFmpeg:
-        
+
 📥 INSTALAÇÃO DO FFMPEG:
-Windows: 
+Windows:
 1. Baixe de: https://ffmpeg.org/download.html#build-windows
 2. Extraia e adicione ao PATH do sistema
 3. Ou use: winget install FFmpeg
@@ -1641,6 +1628,11 @@ Linux/Mac:
 
 ❗ Após a instalação, reinicie o terminal e tente novamente.`);
       }
+
+      // Detectar melhor encoder de vídeo disponível
+      console.log('🔍 Detectando encoder de vídeo disponível...');
+      this.detectedVideoEncoder = await this.detectBestVideoEncoder();
+      console.log(`🎬 Usando encoder: ${this.detectedVideoEncoder}`);
 
       // Mostrar configuração de renderização
       const renderSettings = getRenderSettings(this.renderPreset);
@@ -1712,7 +1704,7 @@ Linux/Mac:
         try {
           const durationCommand = `ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${audioFile}"`;
           console.log(`🔍 Executando comando: ${durationCommand}`);
-          const durationResult = await execAsync(durationCommand, { maxBuffer: 1024 * 1024 * 10, timeout: 30000 }); // 30s timeout
+          const durationResult = await execAsync(durationCommand, { maxBuffer: 1024 * 1024 * 10, timeout: 0 }); // Sem timeout
           totalDuration = parseFloat(durationResult.stdout.trim());
           console.log(`⏱️ Duração total: ${totalDuration}s`);
         } catch (durationError) {
@@ -1725,8 +1717,23 @@ Linux/Mac:
         
         // Obter configurações de renderização baseadas no preset configurado
         const renderSettings = getRenderSettings(this.renderPreset);
-        console.log(`⚙️  Usando preset de renderização: ${this.renderPreset} (NVENC preset: ${renderSettings.preset}, tune: ${renderSettings.tune})`);
-        const ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset ${renderSettings.preset} -tune ${renderSettings.tune} -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        console.log(`⚙️  Usando preset de renderização: ${this.renderPreset} (Encoder: ${this.detectedVideoEncoder}, preset: ${renderSettings.preset}, tune: ${renderSettings.tune})`);
+
+        // Usar encoder detectado (NVENC, AMF, VAAPI ou CPU)
+        let ffmpegCommand: string;
+        if (this.detectedVideoEncoder === 'h264_nvenc') {
+          // NVIDIA NVENC
+          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset ${renderSettings.preset} -tune ${renderSettings.tune} -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        } else if (this.detectedVideoEncoder === 'h264_amf') {
+          // AMD AMF
+          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_amf -usage transcoding -quality speed -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        } else if (this.detectedVideoEncoder === 'h264_vaapi') {
+          // VAAPI (Intel/AMD)
+          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_vaapi -qp 23 -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        } else {
+          // CPU (libx264) - fallback
+          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v libx264 -preset ${renderSettings.preset === 'p1' ? 'ultrafast' : 'fast'} -crf 23 -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+        }
         
         try {
           await this.executeFFmpegWithRetry(ffmpegCommand, `segmento ${i + 1}`);
