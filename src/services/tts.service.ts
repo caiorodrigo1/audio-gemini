@@ -1341,32 +1341,35 @@ PROMPT CORRIGIDO:`;
 
   async generateThumbnails(cleanTitle: string, outputDir: string, promptType: number, count: number = 5): Promise<void> {
     console.log(`🎯 Criando ${count} thumbnails para: "${cleanTitle}"`);
-    
+
+    // Gerar apenas 1 prompt baseado no título
+    console.log(`🎨 Gerando prompt único baseado no título...`);
+    const thumbnailPrompt = await this.generateSingleThumbnailPrompt(cleanTitle, promptType);
+
+    console.log(`📝 Prompt gerado: ${thumbnailPrompt.substring(0, 100)}...`);
+
     let successfulThumbnails = 0;
     let failedThumbnails = 0;
 
     for (let i = 1; i <= count; i++) {
       try {
-        console.log(`🎨 Gerando thumbnail ${i}/${count}...`);
-        
-        // Gerar prompt de thumbnail baseado no título e tipo de prompt com variação
-        const thumbnailPrompt = await this.generateThumbnailPrompt(cleanTitle, promptType, i);
-        
-        // Gerar imagem com Whisk
+        console.log(`🎨 Gerando thumbnail ${i}/${count} com o mesmo prompt...`);
+
+        // Usar o mesmo prompt para todas as 5 thumbnails
         const imageBuffer = await this.callWhiskAPI(thumbnailPrompt);
-        
+
         // Salvar thumbnail com nome do título numerado
         await this.saveThumbnail(imageBuffer, `${cleanTitle}_thumb${i}`, outputDir);
-        
+
         console.log(`✅ Thumbnail ${i} gerada com sucesso: ${cleanTitle}_thumb${i}.jpg`);
         successfulThumbnails++;
-        
+
         // Delay entre thumbnails para evitar rate limiting
         if (i < count) {
           console.log(`⏳ Aguardando 3s antes da próxima thumbnail...`);
           await new Promise(resolve => setTimeout(resolve, 3000));
         }
-        
+
       } catch (error) {
         console.error(`❌ Erro ao gerar thumbnail ${i} para "${cleanTitle}":`, error.message);
         failedThumbnails++;
@@ -1382,70 +1385,28 @@ PROMPT CORRIGIDO:`;
   async generateThumbnail(cleanTitle: string, outputDir: string, promptType: number): Promise<void> {
     try {
       console.log(`🎯 Criando thumbnail para: "${cleanTitle}"`);
-      
-      // Gerar prompt de thumbnail baseado no título e tipo de prompt
-      const thumbnailPrompt = await this.generateThumbnailPrompt(cleanTitle, promptType);
-      
+
+      // Gerar prompt único baseado no título
+      const thumbnailPrompt = await this.generateSingleThumbnailPrompt(cleanTitle, promptType);
+
       // Gerar imagem com Whisk
       const imageBuffer = await this.callWhiskAPI(thumbnailPrompt);
-      
+
       // Salvar thumbnail com nome do título
       await this.saveThumbnail(imageBuffer, cleanTitle, outputDir);
-      
+
       console.log(`✅ Thumbnail gerada com sucesso: ${cleanTitle}.jpg`);
-      
+
     } catch (error) {
       console.error(`❌ Erro ao gerar thumbnail para "${cleanTitle}":`, error.message);
     }
   }
 
-  async generateThumbnailPrompt(cleanTitle: string, promptType: number, variation: number = 1): Promise<string> {
+  async generateSingleThumbnailPrompt(cleanTitle: string, promptType: number): Promise<string> {
     const specializedPrompt = this.getSpecializedPrompt(promptType);
-    
-    // Definir variações de composição e foco baseado no número da thumbnail
-    const variations = [
-      {
-        focus: "CLOSE-UP DRAMÁTICO",
-        composition: "primeiro plano extremo com 80% do quadro ocupado pelo rosto expressivo",
-        emotion: "expressão facial intensa e dramática",
-        lighting: "iluminação lateral dramática criando sombras marcantes",
-        angle: "ângulo frontal direto"
-      },
-      {
-        focus: "PLANO MÉDIO DINÂMICO", 
-        composition: "personagem principal ocupando 60% do quadro em ação",
-        emotion: "expressão de determinação e movimento",
-        lighting: "iluminação cinematográfica com contraluz",
-        angle: "ângulo de 3/4 mostrando perfil dinâmico"
-      },
-      {
-        focus: "COMPOSIÇÃO TRIANGULAR",
-        composition: "múltiplos elementos formando triângulo visual",
-        emotion: "contraste emocional entre personagens ou elementos",
-        lighting: "três pontos de luz criando profundidade",
-        angle: "ângulo elevado mostrando hierarquia visual"
-      },
-      {
-        focus: "PLANO AMERICANO IMPACTANTE",
-        composition: "personagem da cintura para cima ocupando 70% do quadro", 
-        emotion: "expressão de conflito interno e tensão",
-        lighting: "iluminação natural dramática vinda de janela",
-        angle: "ângulo ligeiramente baixo criando imponência"
-      },
-      {
-        focus: "ENQUADRAMENTO SIMÉTRICO",
-        composition: "composição centralizada e equilibrada",
-        emotion: "expressão serena mas misteriosa",
-        lighting: "iluminação difusa e uniforme",
-        angle: "ângulo frontal perfeitamente centralizado"
-      }
-    ];
-
-    const selectedVariation = variations[(variation - 1) % variations.length];
 
     const prompt = `TÍTULO DA HISTÓRIA: "${cleanTitle}"
 ESTILO: ${this.getPromptStyleName(promptType)}
-VARIAÇÃO: Thumbnail ${variation}/5 - ${selectedVariation.focus}
 
 Crie um prompt FOTORREALISTA de thumbnail baseado DIRETAMENTE na cena específica do título fornecido.
 
@@ -1464,21 +1425,12 @@ FOCO NA CENA ESPECÍFICA DO TÍTULO:
 4. Use DETALHES ESPECÍFICOS do contexto cultural/temporal do tipo de história
 5. PERSONALIZE baseado no que o título sugere (não use cenas genéricas)
 
-COMPOSIÇÃO ESPECÍFICA PARA ESTA VARIAÇÃO:
-- TIPO: ${selectedVariation.focus}
-- COMPOSIÇÃO: ${selectedVariation.composition}
-- EMOÇÃO: ${selectedVariation.emotion}  
-- ILUMINAÇÃO: ${selectedVariation.lighting}
-- ÂNGULO: ${selectedVariation.angle}
-
 DETALHES TÉCNICOS OBRIGATÓRIOS:
 - "professional photography equipment, Phase One XF IQ4, Schneider Kreuznach lens"
 - "realistic facial expressions with micro-expressions, authentic human emotions"
 - "natural lighting setup with key light, fill light, rim light"
 - "sharp focus on eyes, shallow depth of field background blur"
 - "color temperature 5600K, professional color correction"
-
-IMPORTANTE: Esta é a thumbnail ${variation} de 5. Crie uma composição ÚNICA e DIFERENTE das outras variações, mas sempre focada no título específico.
 
 Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma linha completa e detalhada.`;
 
