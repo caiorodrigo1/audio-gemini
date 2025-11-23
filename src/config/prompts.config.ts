@@ -8,18 +8,18 @@ export interface PromptMapping {
 }
 
 export const YT_CODE_MAPPING: PromptMapping = {
-  'YT01': 11,            // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
+  'YT02': 11,            // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
   // 'YT03': 6,             // Histórias milionários (PL)
-  'YT04': 7,             // Histórias famílias (IT)
-  'YT05': 8,             // Histórias milionários (RO)
-  'YT06': 9,             // Bridgerton Brasileiro (PT-BR)
-  'YT11': 1,             // Wild West (EN-US)
-  'YT12': 2,             // Crônicas old man (EN-US)
-  'YT13': 3,             // Pessoas desaparecidas (PT-BR)
-  'YT18': 10,            // Santos Católicos - Jornada Humana até Santificação (IT)
-  'D01': 11,               
-  'D02': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
-  'D03': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
+  // 'YT04': 7,             // Histórias famílias (IT)
+  // 'YT05': 8,             // Histórias milionários (RO)
+  // 'YT06': 9,             // Bridgerton Brasileiro (PT-BR)
+  // 'YT11': 1,             // Wild West (EN-US)
+  // 'YT12': 2,             // Crônicas old man (EN-US)
+  // 'YT13': 3,             // Pessoas desaparecidas (PT-BR)
+  // 'YT18': 10,            // Santos Católicos - Jornada Humana até Santificação (IT)
+  // 'D01': 11,               
+  // 'D02': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
+  // 'D03': 11,               // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
 };
 
 export const GENERAL_PROMPT: PromptConfig = {
