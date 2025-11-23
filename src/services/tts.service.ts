@@ -1066,8 +1066,8 @@ Data de criação: ${new Date().toLocaleString('pt-BR')}
 
       // Delay entre imagens para evitar rate limiting
       if (i < prompts.length - 1) {
-        imageGenTimer.log(`⏳ Aguardando 3s antes da próxima imagem...`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        imageGenTimer.log(`⏳ Aguardando 1.5s antes da próxima imagem...`);
+        await new Promise(resolve => setTimeout(resolve, 1500));
       }
     }
 
@@ -1366,8 +1366,8 @@ PROMPT CORRIGIDO:`;
 
         // Delay entre thumbnails para evitar rate limiting
         if (i < count) {
-          console.log(`⏳ Aguardando 3s antes da próxima thumbnail...`);
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          console.log(`⏳ Aguardando 1.5s antes da próxima thumbnail...`);
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
 
       } catch (error) {
@@ -1475,7 +1475,7 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
       // Usa 'increase' com crop mínimo para eliminar bordas pretas
       const ffmpegCommand = `ffmpeg -y -v error -i "${originalPath}" -vf "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080" -q:v 2 "${upscaledPath}"`;
       
-      await execAsync(ffmpegCommand, { maxBuffer: 1024 * 1024 * 5, timeout: 30000 });
+      await execAsync(ffmpegCommand, { maxBuffer: 1024 * 1024 * 5, timeout: 0 });
       
       upscaleTimer.log(`✅ Imagem ${imageIndex + 1} upscaled para 1920x1080: ${upscaledFileName}`);
       
@@ -1506,7 +1506,7 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
       // Comando FFmpeg: Scale com zoom ligeiro para preencher 1920x1080 sem padding
       const ffmpegCommand = `ffmpeg -y -v error -i "${originalPath}" -vf "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080" -q:v 2 "${upscaledPath}"`;
       
-      await execAsync(ffmpegCommand, { maxBuffer: 1024 * 1024 * 5, timeout: 30000 });
+      await execAsync(ffmpegCommand, { maxBuffer: 1024 * 1024 * 5, timeout: 0 });
       
       console.log(`✅ Thumbnail "${cleanTitle}" upscaled para 1920x1080: ${upscaledFileName}`);
       
@@ -1546,7 +1546,7 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
           await new Promise(resolve => setTimeout(resolve, delay));
         }
         
-        await execAsync(command, { maxBuffer: 1024 * 1024 * 10, timeout: 60000 });
+        await execAsync(command, { maxBuffer: 1024 * 1024 * 10, timeout: 0 });
         
         if (attempt > 0) {
           console.log(`✅ ${description} sucesso no retry ${attempt + 1}!`);
@@ -1664,7 +1664,7 @@ Linux/Mac:
         try {
           const durationCommand = `ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${audioFile}"`;
           console.log(`🔍 Executando comando: ${durationCommand}`);
-          const durationResult = await execAsync(durationCommand, { maxBuffer: 1024 * 1024 * 10, timeout: 30000 }); // 30s timeout
+          const durationResult = await execAsync(durationCommand, { maxBuffer: 1024 * 1024 * 10, timeout: 0 }); // Sem timeout
           totalDuration = parseFloat(durationResult.stdout.trim());
           console.log(`⏱️ Duração total: ${totalDuration}s`);
         } catch (durationError) {
