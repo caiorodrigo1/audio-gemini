@@ -31,72 +31,86 @@ export class ConsoleService {
     });
   }
 
-  async promptForBatches(rl: readline.Interface, useFishAudio: boolean): Promise<number | undefined> {
-    return new Promise((resolve) => {
-      const defaultBatch = useFishAudio ? 1 : 5;
-      console.log('\n⚙️  CONFIGURAÇÃO DE BATCHES SIMULTÂNEOS');
-      console.log(`Quantos batches simultâneos de áudio deseja usar?`);
-      console.log(`   Padrão: ${defaultBatch} (pressione Enter para usar o padrão)`);
-      console.log(`   Recomendado: ${useFishAudio ? '1-2' : '3-8'} batches`);
-      console.log(`   Digite um número ou pressione Enter para padrão:`);
-      
-      rl.question('Batches: ', (answer: string) => {
-        const trimmed = answer.trim();
-        if (!trimmed) {
-          console.log(`✅ Usando valor padrão: ${defaultBatch} batches`);
-          resolve(undefined); // Usará o padrão
-          return;
-        }
-        
-        const batches = parseInt(trimmed, 10);
-        if (isNaN(batches) || batches < 1) {
-          console.log(`⚠️  Valor inválido. Usando padrão: ${defaultBatch} batches`);
-          resolve(undefined);
-          return;
-        }
-        
-        console.log(`✅ Configurado: ${batches} batches simultâneos`);
-        resolve(batches);
-      });
-    });
-  }
 
   async promptForModeSelection(rl: readline.Interface, defaultPath: string): Promise<boolean> {
     return new Promise((resolve) => {
-      console.log('\n🚀 AUDIO GEMINI TTS - MODO AUTOMÁTICO');
-      console.log('=====================================');
-      console.log('');
-      console.log('📁 MODOS DISPONÍVEIS:');
-      console.log(`1) 🏠 Modo Padrão - CanaisAtivos: ${defaultPath}`);
-      console.log('   → Escaneia automaticamente todas as pastas YT* e processa arquivos .txt');
-      console.log('');
-      console.log('2) 🔧 Modo Personalizado - Digitar caminho manualmente');
-      console.log('   → Permite especificar qualquer pasta raiz');
-      console.log('');
-      console.log('💡 O sistema irá:');
-      console.log('   • Encontrar todas as pastas YT, YT01, YT02, etc.');
-      console.log('   • Processar todos os arquivos .txt dentro delas');
-      console.log('   • Detectar automaticamente o estilo correto (vampiros, famílias, etc.)');
-      console.log('   • Gerar áudio + imagens + thumbnails para cada arquivo');
-      console.log('');
+      const options = [
+        {
+          label: `🏠 Modo Padrão - CanaisAtivos: ${defaultPath}`,
+          description: '   → Escaneia automaticamente todas as pastas YT* e processa arquivos .txt',
+          value: true
+        },
+        {
+          label: '🔧 Modo Personalizado - Digitar caminho manualmente',
+          description: '   → Permite especificar qualquer pasta raiz',
+          value: false
+        }
+      ];
 
-      rl.question('Escolha o modo (1 para Padrão, 2 para Personalizado): ', (answer: string) => {
-        const trimmed = answer.trim();
-        if (trimmed === '1' || trimmed === '') {
-          console.log('✅ Selecionado: Modo Padrão');
+      let selectedIndex = 0;
+      let isFirstRender = true;
+
+      const renderMenu = () => {
+        console.clear();
+
+        console.log('\n🚀 AUDIO GEMINI TTS - MODO AUTOMÁTICO');
+        console.log('=====================================');
+        console.log('');
+        console.log('📁 MODOS DISPONÍVEIS:');
+        console.log('');
+        console.log('💡 O sistema irá:');
+        console.log('   • Encontrar todas as pastas YT, YT01, YT02, etc.');
+        console.log('   • Processar todos os arquivos .txt dentro delas');
+        console.log('   • Detectar automaticamente o estilo correto (vampiros, famílias, etc.)');
+        console.log('   • Gerar áudio + imagens + thumbnails para cada arquivo');
+        console.log('');
+
+        options.forEach((option, index) => {
+          const pointer = index === selectedIndex ? '👉 ' : '   ';
+          console.log(`${pointer}${option.label}`);
+          console.log(`${option.description}`);
+          console.log('');
+        });
+
+        console.log('Use ↑↓ para navegar, ENTER para selecionar, ESC para sair');
+      };
+
+      const handleKeyPress = (key: Buffer) => {
+        const keyStr = key.toString();
+        if (keyStr === '\u001b[A') { // Seta para cima
+          selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : options.length - 1;
+          renderMenu();
+        } else if (keyStr === '\u001b[B') { // Seta para baixo
+          selectedIndex = selectedIndex < options.length - 1 ? selectedIndex + 1 : 0;
+          renderMenu();
+        } else if (keyStr === '\r' || keyStr === '\n') { // Enter
+          const selectedOption = options[selectedIndex];
+          console.log(`\n✅ Selecionado: ${selectedOption.label.split(' - ')[0]}`);
+          process.stdin.setRawMode(false);
+          process.stdin.removeListener('data', handleKeyPress);
+          resolve(selectedOption.value);
+        } else if (keyStr === '\u001b') { // ESC
+          console.log('\n⚠️  Saindo... Usando modo padrão.');
+          process.stdin.setRawMode(false);
+          process.stdin.removeListener('data', handleKeyPress);
           resolve(true);
-          return;
         }
+      };
 
-        if (trimmed === '2') {
-          console.log('✅ Selecionado: Modo Personalizado');
-          resolve(false);
-          return;
-        }
+      // Configurar modo raw para capturar setas
+      process.stdin.setRawMode(true);
+      process.stdin.on('data', handleKeyPress);
 
-        console.log('⚠️  Opção inválida. Usando modo padrão.');
+      // Renderizar menu inicial
+      renderMenu();
+
+      // Timeout de segurança (5 minutos)
+      setTimeout(() => {
+        console.log('\n⏰ Timeout - Usando modo padrão.');
+        process.stdin.setRawMode(false);
+        process.stdin.removeListener('data', handleKeyPress);
         resolve(true);
-      });
+      }, 300000); // 5 minutos
     });
   }
 
@@ -120,33 +134,6 @@ export class ConsoleService {
     });
   }
 
-  async promptForRenderPreset(rl: readline.Interface): Promise<RenderPreset> {
-    return new Promise((resolve) => {
-      console.log('\n🎬 CONFIGURAÇÃO DE QUALIDADE DE RENDERIZAÇÃO');
-      console.log('Qual preset de renderização deseja usar?');
-      console.log('   1) Standard (padrão) - Preset p4, tune hq, alta qualidade');
-      console.log('   2) Fast - Preset p1, tune ll, renderização 2-3x mais rápida');
-      console.log('   Digite 1 ou 2 (padrão: 1):');
-      
-      rl.question('Preset: ', (answer: string) => {
-        const trimmed = answer.trim().toLowerCase();
-        if (!trimmed || trimmed === '1') {
-          console.log('✅ Usando preset: Standard (p4, hq)');
-          resolve('standard');
-          return;
-        }
-        
-        if (trimmed === '2') {
-          console.log('✅ Usando preset: Fast (p1, ll) - renderização otimizada para velocidade');
-          resolve('fast');
-          return;
-        }
-        
-        console.log('⚠️  Opção inválida. Usando padrão: Standard');
-        resolve('standard');
-      });
-    });
-  }
 
   async start(useFishAudio: boolean = false, concurrentBatches?: number, renderPreset?: RenderPreset): Promise<void> {
     // Conectar o TTS service com este console service e informar se deve usar Fish Audio
@@ -171,18 +158,26 @@ export class ConsoleService {
       console.log(`\n✅ Usando caminho personalizado: ${selectedPath}`);
     }
 
-    // Se não foram passados via linha de comando, perguntar interativamente
+    // Detectar automaticamente o número máximo de batches baseado nas API keys disponíveis
     let finalBatches = concurrentBatches;
     let finalRenderPreset = renderPreset;
 
     if (concurrentBatches === undefined) {
-      finalBatches = await this.promptForBatches(rl, useFishAudio);
+      // Detectar automaticamente quantas API keys estão configuradas
+      const apiKeysCount = this.ttsService.getApiKeysCount();
+      finalBatches = apiKeysCount;
+
+      console.log(`🔑 API keys detectadas: ${apiKeysCount}`);
+      console.log(`⚙️  Batches simultâneos configurados automaticamente: ${finalBatches}`);
+      console.log(`💡 Cada batch usará uma API key diferente para processamento paralelo`);
     } else {
       console.log(`⚙️  Batches configurados via linha de comando: ${concurrentBatches}`);
     }
 
     if (renderPreset === undefined) {
-      finalRenderPreset = await this.promptForRenderPreset(rl);
+      // Usar automaticamente o preset fast (opção 2) para velocidade otimizada
+      finalRenderPreset = 'fast';
+      console.log(`🎬 Preset de renderização configurado automaticamente: Fast (p1, ll) - 2-3x mais rápido`);
     } else {
       console.log(`🎬 Preset de renderização configurado via linha de comando: ${renderPreset}`);
     }
@@ -207,7 +202,8 @@ export class ConsoleService {
     console.log('');
     console.log('💡 Configurações ativas:');
     console.log(`  • Fish Audio: ${useFishAudio ? 'Ativado' : 'Desativado'}`);
-    console.log(`  • Batches simultâneos: ${finalBatches || (useFishAudio ? 1 : 5)}`);
+    console.log(`  • API Keys disponíveis: ${this.ttsService.getApiKeysCount()}`);
+    console.log(`  • Batches simultâneos: ${finalBatches || (useFishAudio ? 1 : this.ttsService.getApiKeysCount())}`);
     console.log(`  • Preset de renderização: ${finalRenderPreset || 'standard'}`);
     console.log('');
     

@@ -201,8 +201,12 @@ export class TTSService {
     return promptNames[promptType] || `Tipo ${promptType}`;
   }
   
-  private get apiKeys(): string[] {
+  private   get apiKeys(): string[] {
     return this.config.googleApiKeys;
+  }
+
+  getApiKeysCount(): number {
+    return this.config.googleApiKeys.length;
   }
 
   splitTextIntoChunks(text: string): TextChunk[] {
