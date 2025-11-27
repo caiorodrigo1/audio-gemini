@@ -305,8 +305,8 @@ export class TTSService {
 
       try {
         if (attempt > 0) {
-          // Delay adicional nas tentativas subsequentes
-          await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          // Delay fixo de 1s entre tentativas com diferentes API keys
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
         const response = await axios.post(url, payload, {
@@ -345,11 +345,13 @@ export class TTSService {
         const isQuotaError = error.response?.data?.[0]?.error?.code === 429;
         
         console.error(`❌ Tentativa ${attempt + 1} falhou para chunk ${chunk.chunkIndex + 1} (API key ${apiKeyIndex + 1}):`, error.message);
-        
-        // Debug adicional para entender o erro
+
+        // Debug adicional para entender o erro (exceto rate limit)
         if (error.response) {
           console.error(`Status: ${error.response.status}`);
-          console.error(`Response data:`, JSON.stringify(error.response.data, null, 2));
+          if (error.response.status !== 429) {
+            console.error(`Response data:`, JSON.stringify(error.response.data, null, 2));
+          }
         }
         
         const isResourceExhausted = error.response?.data?.[0]?.error?.code === 429 || 
