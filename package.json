@@ -9,6 +9,7 @@
     "start:fish:batches": "ts-node src/main.ts --fish-audio --batches=2",
     "start:fast": "ts-node src/main.ts --render-preset=fast",
     "start:fish:fast": "ts-node src/main.ts --fish-audio --render-preset=fast",
+    "start:custom": "ts-node src/main.ts --path=\"D:\\Seu\\Caminho\\Personalizado\"",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
     "extract-token": "ts-node src/extract-token.ts",
@@ -26,8 +27,11 @@
     "axios": "^1.10.0",
     "dotenv": "^17.2.1",
     "msgpack5": "^6.0.2",
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "winston": "^3.18.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.13",

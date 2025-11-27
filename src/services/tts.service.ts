@@ -11,7 +11,8 @@ import { WhiskAuthService } from './whisk-auth.service';
 import { FishAudioService } from './fish-audio.service';
 import { VoiceSelectorService } from './voice-selector.service';
 import { ModelSelectorService } from './model-selector.service';
-import { AUDIO_CONFIG, BATCH_SIZES, TIMEOUTS, FILE_PATTERNS } from '../constants';
+import { LoggerService } from './logger.service';
+import { AUDIO_CONFIG, BATCH_SIZES, TIMEOUTS, FILE_PATTERNS, DELAYS, RETRY_CONFIG } from '../constants';
 import { RenderPreset, getRenderSettings } from '../config/render.config';
 
 
@@ -24,18 +25,23 @@ export class TTSService {
   private concurrentBatches?: number; // Quantidade de batches simultâneos configurada pelo usuário
   private renderPreset: RenderPreset = 'standard'; // Preset de renderização (standard ou fast)
   private detectedVideoEncoder: string = 'libx264'; // Encoder de vídeo detectado (NVIDIA/AMD/CPU)
+  private cachedVideoEncoder: string | null = null; // Cache do encoder detectado
 
   constructor(
     private readonly whiskAuthService: WhiskAuthService,
     private readonly fishAudioService: FishAudioService,
     private readonly voiceSelectorService: VoiceSelectorService,
-    private readonly modelSelectorService: ModelSelectorService
+    private readonly modelSelectorService: ModelSelectorService,
+    private readonly logger: LoggerService
   ) {
     this.config = loadEnvConfig();
     this.whiskToken = this.config.whiskToken;
     
     // Garantir que sempre temos o token mais recente
     this.reloadWhiskTokenFromEnv();
+    
+    // Log do nível de log configurado
+    this.logger.debug(`LoggerService inicializado com nível: ${this.logger.getLogLevel()}`);
   }
 
   setConsoleService(consoleService: any) {
@@ -261,19 +267,28 @@ export class TTSService {
     // Caso contrário, usar a lógica original do Google Gemini
     // Tentar TODAS as API keys disponíveis em caso de resource exhausted
     const totalKeys = this.apiKeys.length;
-    const maxRetries = totalKeys * 2; // 2 tentativas por API key
+    const maxRetries = totalKeys * RETRY_CONFIG.MAX_RETRIES_PER_KEY;
     let lastError: any;
-    
+    // Rastrear quais keys já falharam com resource exhausted
+    const exhaustedKeys = new Set<number>();
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       // Rotação através de TODAS as API keys disponíveis
       const baseKeyIndex = chunk.chunkIndex % totalKeys;  // API key base do chunk
       const apiKeyIndex = (baseKeyIndex + attempt) % totalKeys;  // Rotaciona através de TODAS as keys
+
+      // Pular keys que já falharam com resource exhausted
+      if (exhaustedKeys.has(apiKeyIndex)) {
+        this.logger.debug(`Pulando API key ${apiKeyIndex + 1} (já esgotada)`);
+        continue;
+      }
+
       const currentApiKey = this.apiKeys[apiKeyIndex];
       
       if (attempt === 0) {
-        console.log(`📝 Chunk ${chunk.chunkIndex + 1} usando API key ${apiKeyIndex + 1}/${totalKeys} (${currentApiKey.substring(0, 15)}...)`);
+        this.logger.info(`Chunk ${chunk.chunkIndex + 1} usando API key ${apiKeyIndex + 1}/${totalKeys} (${currentApiKey.substring(0, 15)}...)`);
       } else {
-        console.log(`🔄 Tentativa ${attempt + 1}/${maxRetries} para chunk ${chunk.chunkIndex + 1} com API key ${apiKeyIndex + 1}/${totalKeys} (${currentApiKey.substring(0, 15)}...)`);
+        this.logger.info(`Tentativa ${attempt + 1}/${maxRetries} para chunk ${chunk.chunkIndex + 1} com API key ${apiKeyIndex + 1}/${totalKeys} (${currentApiKey.substring(0, 15)}...)`);
       }
       
       
@@ -305,8 +320,8 @@ export class TTSService {
 
       try {
         if (attempt > 0) {
-          // Delay fixo de 1s entre tentativas com diferentes API keys
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Delay entre tentativas com diferentes API keys
+          await new Promise(resolve => setTimeout(resolve, DELAYS.BETWEEN_RETRIES));
         }
 
         const response = await axios.post(url, payload, {
@@ -333,9 +348,9 @@ export class TTSService {
 
         const audioData = responseData.candidates[0].content.parts[0].inlineData.data;
         if (attempt > 0) {
-          console.log(`✅ Chunk ${chunk.chunkIndex + 1} convertido com sucesso na tentativa ${attempt + 1} (API key ${apiKeyIndex + 1})!`);
+          this.logger.info(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso na tentativa ${attempt + 1} (API key ${apiKeyIndex + 1})`);
         } else {
-          console.log(`✅ Chunk ${chunk.chunkIndex + 1} convertido com sucesso (API key ${apiKeyIndex + 1})!`);
+          this.logger.debug(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso (API key ${apiKeyIndex + 1})`);
         }
         return Buffer.from(audioData, 'base64');
         
@@ -344,40 +359,40 @@ export class TTSService {
         const isRateLimit = error.response?.status === 429;
         const isQuotaError = error.response?.data?.[0]?.error?.code === 429;
         
-        console.error(`❌ Tentativa ${attempt + 1} falhou para chunk ${chunk.chunkIndex + 1} (API key ${apiKeyIndex + 1}):`, error.message);
+        this.logger.error(`Tentativa ${attempt + 1} falhou para chunk ${chunk.chunkIndex + 1} (API key ${apiKeyIndex + 1}): ${error.message}`);
 
         // Debug adicional para entender o erro (exceto rate limit)
         if (error.response) {
-          console.error(`Status: ${error.response.status}`);
+          this.logger.debug(`Status HTTP: ${error.response.status}`);
           if (error.response.status !== 429) {
-            console.error(`Response data:`, JSON.stringify(error.response.data, null, 2));
+            this.logger.debug('Response data', error.response.data);
           }
         }
         
-        const isResourceExhausted = error.response?.data?.[0]?.error?.code === 429 || 
+        const isResourceExhausted = error.response?.data?.[0]?.error?.code === 429 ||
                                    error.response?.data?.[0]?.error?.status === 'RESOURCE_EXHAUSTED' ||
                                    (error.message && error.message.includes('RESOURCE_EXHAUSTED'));
-        
+
+        // Marcar esta key como esgotada se for resource exhausted
+        if (isResourceExhausted) {
+          exhaustedKeys.add(apiKeyIndex);
+          this.logger.warn(`Resource exhausted detectado na API key ${apiKeyIndex + 1} - não tentará novamente`);
+        }
+
         if (isRateLimit || isQuotaError || isResourceExhausted) {
-          console.log(`🔄 Rate limit/quota/resource exhausted (API key ${apiKeyIndex + 1}), tentando com próxima API key...`);
+          this.logger.warn(`Rate limit/quota/resource exhausted (API key ${apiKeyIndex + 1}), tentando com próxima API key`);
           if (attempt < maxRetries - 1) {
-            // Aguardar mais tempo em caso de quota diária esgotada
-            const isDaily = error.response?.data?.[0]?.error?.details?.some(
-              detail => detail.violations?.[0]?.quotaId?.includes('PerDay')
-            );
-            if (isDaily) {
-              console.log(`⏳ Quota diária detectada, aguardando 5s antes da próxima API key...`);
-              await new Promise(resolve => setTimeout(resolve, 5000));
-            } else if (isResourceExhausted) {
-              console.log(`⏳ Resource exhausted detectado, aguardando 2s antes da próxima API key...`);
-              await new Promise(resolve => setTimeout(resolve, 2000));
-            }
+            // Usar backoff adaptativo baseado no tipo de erro
+            const backoff = this.calculateBackoff(attempt, error);
+            const backoffSeconds = (backoff / 1000).toFixed(1);
+            this.logger.debug(`Aguardando ${backoffSeconds}s antes da próxima API key (backoff adaptativo)`);
+            await new Promise(resolve => setTimeout(resolve, backoff));
             continue;
           }
         } else {
           // Para outros erros, tentar uma vez mais com API key diferente
           if (attempt < maxRetries - 1) {
-            console.log(`🔄 Tentando com próxima API key...`);
+            this.logger.debug(`Tentando com próxima API key`);
             continue;
           }
           break;
@@ -385,15 +400,20 @@ export class TTSService {
       }
     }
     
-    console.error(`❌ Todas as ${maxRetries} tentativas falharam para chunk ${chunk.chunkIndex + 1}`);
-    console.error(`📊 Tentaram-se todas as ${totalKeys} API keys disponíveis (${maxRetries / totalKeys} tentativas por key)`);
+    const exhaustedCount = exhaustedKeys.size;
+    const actualAttempts = exhaustedCount > 0 ? totalKeys : maxRetries / totalKeys;
+    this.logger.error(`Todas as ${maxRetries} tentativas falharam para chunk ${chunk.chunkIndex + 1}`);
+    this.logger.error(`Tentaram-se todas as ${totalKeys} API keys disponíveis (${actualAttempts} tentativa(s) por key)`);
+    if (exhaustedCount > 0) {
+      this.logger.warn(`${exhaustedCount} API key(s) esgotada(s) por resource exhausted`);
+    }
     if (lastError.response) {
-      console.error('Última resposta da API:', lastError.response.data);
+      this.logger.debug('Última resposta da API', lastError.response.data);
     }
     
     // Tocar som de erro e parar a aplicação
-    console.error(`🚨 ERRO CRÍTICO: Chunk ${chunk.chunkIndex + 1} falhou após esgotar todas as ${totalKeys} API keys!`);
-    console.error('🛑 Parando a aplicação...');
+    this.logger.error(`ERRO CRÍTICO: Chunk ${chunk.chunkIndex + 1} falhou após esgotar todas as ${totalKeys} API keys!`);
+    this.logger.error('Parando a aplicação...');
     this.playErrorSound();
     
     // Aguardar um pouco para o som tocar antes de sair
@@ -402,6 +422,106 @@ export class TTSService {
     }, 2000);
     
     throw lastError;
+  }
+
+  /**
+   * Calcula delay de backoff adaptativo baseado no tipo de erro e tentativa
+   * @param attempt Número da tentativa atual (0-indexed)
+   * @param lastError Último erro ocorrido (opcional)
+   * @returns Delay em milissegundos
+   */
+  private calculateBackoff(attempt: number, lastError?: any): number {
+    // Se for rate limit (429), usar backoff exponencial
+    if (lastError?.response?.status === 429) {
+      // Backoff exponencial com limite máximo
+      return Math.min(
+        RETRY_CONFIG.INITIAL_BACKOFF * Math.pow(RETRY_CONFIG.BACKOFF_MULTIPLIER, attempt),
+        RETRY_CONFIG.MAX_BACKOFF
+      );
+    }
+    
+    // Se for quota diária esgotada, delay maior
+    if (lastError?.response?.data?.[0]?.error?.details?.some(
+      (detail: any) => detail.violations?.[0]?.quotaId?.includes('PerDay')
+    )) {
+      return DELAYS.QUOTA_DAILY;
+    }
+    
+    // Se for resource exhausted, delay médio
+    if (lastError?.response?.data?.[0]?.error?.status === 'RESOURCE_EXHAUSTED' ||
+        (lastError?.message && lastError.message.includes('RESOURCE_EXHAUSTED'))) {
+      return DELAYS.RATE_LIMIT_BACKOFF;
+    }
+    
+    // Delay padrão menor para outros erros
+    return DELAYS.RATE_LIMIT_BACKOFF;
+  }
+
+  /**
+   * Retry paralelo de chunks que falharam com limite de concorrência
+   * @param failedChunks Array de chunks que falharam
+   * @param totalChunks Total de chunks para contexto de log
+   * @param outputDir Diretório de saída
+   * @param audioTimer Timer para logs
+   * @param maxConcurrency Número máximo de retries paralelos (padrão: 3)
+   * @returns Array de caminhos de arquivos salvos com sucesso
+   */
+  private async retryFailedChunks(
+    failedChunks: TextChunk[],
+    totalChunks: number,
+    outputDir: string,
+    audioTimer: Timer,
+    maxConcurrency: number = 3
+  ): Promise<string[]> {
+    const results: string[] = [];
+    
+    // Processar em lotes paralelos
+    for (let i = 0; i < failedChunks.length; i += maxConcurrency) {
+      const batch = failedChunks.slice(i, i + maxConcurrency);
+      
+      const retryPromises = batch.map(async (chunk) => {
+        try {
+          audioTimer.log(`🔄 Retry chunk ${chunk.chunkIndex + 1}/${totalChunks}...`);
+
+          const audioData = await this.convertToSpeech(chunk);
+          let finalAudio: Buffer;
+
+          if (this.useFishAudio) {
+            // Fish Audio já retorna WAV, não precisa converter
+            finalAudio = audioData;
+          } else {
+            // Google Gemini retorna raw audio, precisa converter para WAV
+            finalAudio = this.convertToWav(audioData);
+          }
+
+          const filePath = await this.saveAudioFile(finalAudio, chunk.chunkIndex, outputDir);
+          audioTimer.log(`✅ Chunk ${chunk.chunkIndex + 1} salvo no retry: ${path.basename(filePath)}`);
+          
+          return filePath;
+        } catch (retryError) {
+          audioTimer.log(`❌ Retry falhou para chunk ${chunk.chunkIndex + 1}: ${retryError.message}`);
+          audioTimer.log(`⏭️ Pulando chunk ${chunk.chunkIndex + 1} definitivamente`);
+          return null;
+        }
+      });
+      
+      // Aguardar todos os retries do lote terminarem
+      const batchResults = await Promise.allSettled(retryPromises);
+      
+      // Coletar resultados bem-sucedidos
+      batchResults.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value) {
+          results.push(result.value);
+        }
+      });
+      
+      // Pequeno delay entre batches de retry para evitar sobrecarga
+      if (i + maxConcurrency < failedChunks.length) {
+        await new Promise(resolve => setTimeout(resolve, DELAYS.BETWEEN_RETRY_BATCHES));
+      }
+    }
+    
+    return results;
   }
 
   convertToWav(rawBuffer: Buffer): Buffer {
@@ -551,38 +671,11 @@ export class TTSService {
         }
       });
 
-      // Retry dos chunks que falharam
+      // Retry dos chunks que falharam em paralelo
       if (failedChunks.length > 0) {
-        audioTimer.log(`🔄 Tentando novamente ${failedChunks.length} chunk(s) que falharam...`);
-
-        for (const failedChunk of failedChunks) {
-          try {
-            audioTimer.log(`🔄 Retry chunk ${failedChunk.chunkIndex + 1}/${chunks.length}...`);
-
-            const audioData = await this.convertToSpeech(failedChunk);
-            let finalAudio: Buffer;
-
-            if (this.useFishAudio) {
-              // Fish Audio já retorna WAV, não precisa converter
-              finalAudio = audioData;
-            } else {
-              // Google Gemini retorna raw audio, precisa converter para WAV
-              finalAudio = this.convertToWav(audioData);
-            }
-
-            const filePath = await this.saveAudioFile(finalAudio, failedChunk.chunkIndex, outputDir);
-
-            savedFiles.push(filePath);
-            audioTimer.log(`✅ Chunk ${failedChunk.chunkIndex + 1} salvo no retry: ${path.basename(filePath)}`);
-
-          } catch (retryError) {
-            audioTimer.log(`❌ Retry falhou para chunk ${failedChunk.chunkIndex + 1}: ${retryError.message}`);
-            audioTimer.log(`⏭️ Pulando chunk ${failedChunk.chunkIndex + 1} definitivamente`);
-          }
-
-          // Delay entre retries
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+        audioTimer.log(`🔄 Tentando novamente ${failedChunks.length} chunk(s) que falharam (retry paralelo)...`);
+        const retryResults = await this.retryFailedChunks(failedChunks, chunks.length, outputDir, audioTimer);
+        savedFiles.push(...retryResults);
       }
 
       // Verificar se muitos chunks falharam consecutivamente (indicativo de problema geral)
@@ -602,13 +695,23 @@ export class TTSService {
       }
 
       // Delay entre blocos baseado no modo de áudio
+      // Usar backoff adaptativo: começar com delay menor e aumentar se necessário
       if (i + batchSize < chunks.length) {
         if (this.useFishAudio) {
-          audioTimer.log('Aguardando 3s antes do próximo bloco (Fish Audio)...');
-          await new Promise(resolve => setTimeout(resolve, 3000)); // 3 segundos para Fish Audio
+          // Fish Audio: delay fixo menor já que não tem rate limits tão restritivos
+          const delaySeconds = (DELAYS.BETWEEN_BATCHES_FISH / 1000).toFixed(0);
+          audioTimer.log(`Aguardando ${delaySeconds}s antes do próximo bloco (Fish Audio)...`);
+          await new Promise(resolve => setTimeout(resolve, DELAYS.BETWEEN_BATCHES_FISH));
         } else {
-          audioTimer.log('Aguardando 30s antes do próximo bloco (Google free tier limits)...');
-          await new Promise(resolve => setTimeout(resolve, 30000)); // 30 segundos para Google
+          // Google: usar backoff adaptativo baseado no número do bloco
+          const blockNumber = Math.floor(i / batchSize) + 1;
+          const adaptiveDelay = Math.min(
+            DELAYS.BETWEEN_BATCHES_GOOGLE_INITIAL + (blockNumber - 1) * DELAYS.BETWEEN_BATCHES_GOOGLE_INCREMENT,
+            DELAYS.BETWEEN_BATCHES_GOOGLE_MAX
+          );
+          const delaySeconds = (adaptiveDelay / 1000).toFixed(0);
+          audioTimer.log(`Aguardando ${delaySeconds}s antes do próximo bloco (Google - backoff adaptativo)...`);
+          await new Promise(resolve => setTimeout(resolve, adaptiveDelay));
         }
       }
     }
@@ -653,16 +756,19 @@ export class TTSService {
     imageTimer.logEnd();
   }
 
-  private startLiveTimer(startTime: number): NodeJS.Timeout {
+  private startLiveTimer(startTime: number, fileNumber?: number, totalFiles?: number): NodeJS.Timeout {
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const minutes = Math.floor(elapsed / 60000);
       const seconds = Math.floor((elapsed % 60000) / 1000);
       const timeString = `${minutes}m ${seconds}s`;
 
+      // Adicionar informação do arquivo atual se disponível
+      const fileInfo = fileNumber && totalFiles ? ` [${fileNumber}/${totalFiles}]` : '';
+
       // Usar process.stdout.write para atualizar na mesma linha
-      process.stdout.write(`\r⏱️  Tempo decorrido: ${timeString}     `);
-    }, 1000); // Atualiza a cada 1 segundo
+      process.stdout.write(`\r⏱️  Tempo decorrido: ${timeString}${fileInfo}     `);
+    }, DELAYS.LIVE_TIMER_UPDATE_INTERVAL); // Atualiza a cada 1 segundo
 
     return interval;
   }
@@ -672,13 +778,13 @@ export class TTSService {
     process.stdout.write('\n'); // Nova linha após parar o timer
   }
 
-  async processTextToSpeech(text: string, outputDir: string = this.config.defaultOutputDir, filePath?: string): Promise<string[]> {
+  async processTextToSpeech(text: string, outputDir: string = this.config.defaultOutputDir, filePath?: string, fileNumber?: number, totalFiles?: number): Promise<string[]> {
     const totalTimer = new Timer('Processamento completo');
     totalTimer.logStart();
 
     // Iniciar timer em tempo real
     const startTime = Date.now();
-    const liveTimer = this.startLiveTimer(startTime);
+    const liveTimer = this.startLiveTimer(startTime, fileNumber, totalFiles);
 
     if (!text) {
       this.stopLiveTimer(liveTimer);
@@ -870,7 +976,7 @@ Seja específico e detalhado para garantir consistência visual.`;
 
       // Delay entre lotes
       if (i + batchSize < chunks.length) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, DELAYS.BETWEEN_PROMPT_BATCHES));
       }
     }
 
@@ -1073,8 +1179,9 @@ Data de criação: ${new Date().toLocaleString('pt-BR')}
 
       // Delay entre imagens para evitar rate limiting
       if (i < prompts.length - 1) {
-        imageGenTimer.log(`⏳ Aguardando 1.5s antes da próxima imagem...`);
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        const delaySeconds = (DELAYS.BETWEEN_IMAGES / 1000).toFixed(1);
+        imageGenTimer.log(`⏳ Aguardando ${delaySeconds}s antes da próxima imagem...`);
+        await new Promise(resolve => setTimeout(resolve, DELAYS.BETWEEN_IMAGES));
       }
     }
 
@@ -1096,6 +1203,7 @@ Data de criação: ${new Date().toLocaleString('pt-BR')}
         }
         const imageBuffer = await this.callWhiskAPI(currentPrompt);
         await this.saveImage(imageBuffer, imageIndex, outputDir);
+        
         return true; // Sucesso!
         
       } catch (error) {
@@ -1187,8 +1295,9 @@ PROMPT CORRIGIDO:`;
       try {
         if (attempt > 0) {
           console.log(`🔄 Tentativa ${attempt + 1}/${maxRetries} para gerar imagem...`);
-          // Delay progressivo entre tentativas
-          await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          // Delay progressivo entre tentativas (backoff exponencial)
+          const backoffDelay = DELAYS.WHISK_RETRY_BACKOFF_BASE * attempt;
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
         }
 
         const payload: WhiskApiPayload = {
@@ -1373,8 +1482,9 @@ PROMPT CORRIGIDO:`;
 
         // Delay entre thumbnails para evitar rate limiting
         if (i < count) {
-          console.log(`⏳ Aguardando 1.5s antes da próxima thumbnail...`);
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          const delaySeconds = (DELAYS.BETWEEN_THUMBNAILS / 1000).toFixed(1);
+          console.log(`⏳ Aguardando ${delaySeconds}s antes da próxima thumbnail...`);
+          await new Promise(resolve => setTimeout(resolve, DELAYS.BETWEEN_THUMBNAILS));
         }
 
       } catch (error) {
@@ -1530,6 +1640,12 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
   }
 
   private async detectBestVideoEncoder(): Promise<string> {
+    // Cachear resultado na primeira execução
+    if (this.cachedVideoEncoder) {
+      this.logger.debug(`Usando encoder em cache: ${this.cachedVideoEncoder}`);
+      return this.cachedVideoEncoder;
+    }
+
     const { exec } = require('child_process');
     const util = require('util');
     const execAsync = util.promisify(exec);
@@ -1545,17 +1661,21 @@ Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma 
       try {
         // Testar se o encoder está disponível
         const testCommand = `ffmpeg -f lavfi -i testsrc=duration=0.1:size=320x240:rate=1 -c:v ${encoder.name} -f null -`;
-        await execAsync(testCommand, { timeout: 5000 }); // Timeout curto para teste rápido
+        await execAsync(testCommand, { timeout: TIMEOUTS.ENCODER_TEST });
 
-        console.log(`✅ Encoder encontrado: ${encoder.description} (${encoder.name})`);
+        this.logger.info(`Encoder encontrado: ${encoder.description} (${encoder.name})`);
+        // Cachear resultado
+        this.cachedVideoEncoder = encoder.name;
         return encoder.name;
       } catch (error) {
-        console.log(`⚠️ Encoder não disponível: ${encoder.description} (${encoder.name})`);
+        this.logger.debug(`Encoder não disponível: ${encoder.description} (${encoder.name})`);
       }
     }
 
     // Fallback final - sempre deve funcionar
-    console.log('⚠️ Nenhum encoder otimizado encontrado. Usando CPU (libx264).');
+    this.logger.warn('Nenhum encoder otimizado encontrado. Usando CPU (libx264).');
+    // Cachear fallback também
+    this.cachedVideoEncoder = 'libx264';
     return 'libx264';
   }
 
