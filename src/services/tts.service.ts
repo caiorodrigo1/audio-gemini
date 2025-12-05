@@ -202,7 +202,9 @@ export class TTSService {
       7: 'Famílias Italiano (IT)',
       8: 'Milionários Romeno (RO)',
       9: 'Bridgerton Brasileiro (PT-BR)',
-      10: 'Jornada dos Santos - Humano até Santificação (IT)'
+      10: 'Jornada dos Santos - Humano até Santificação (IT)',
+      11: 'Temática Sobrenatural',
+      12: 'Heróis de Guerra'
     };
     return promptNames[promptType] || `Tipo ${promptType}`;
   }
@@ -431,30 +433,8 @@ export class TTSService {
    * @returns Delay em milissegundos
    */
   private calculateBackoff(attempt: number, lastError?: any): number {
-    // Se for rate limit (429), usar backoff exponencial
-    if (lastError?.response?.status === 429) {
-      // Backoff exponencial com limite máximo
-      return Math.min(
-        RETRY_CONFIG.INITIAL_BACKOFF * Math.pow(RETRY_CONFIG.BACKOFF_MULTIPLIER, attempt),
-        RETRY_CONFIG.MAX_BACKOFF
-      );
-    }
-    
-    // Se for quota diária esgotada, delay maior
-    if (lastError?.response?.data?.[0]?.error?.details?.some(
-      (detail: any) => detail.violations?.[0]?.quotaId?.includes('PerDay')
-    )) {
-      return DELAYS.QUOTA_DAILY;
-    }
-    
-    // Se for resource exhausted, delay médio
-    if (lastError?.response?.data?.[0]?.error?.status === 'RESOURCE_EXHAUSTED' ||
-        (lastError?.message && lastError.message.includes('RESOURCE_EXHAUSTED'))) {
-      return DELAYS.RATE_LIMIT_BACKOFF;
-    }
-    
-    // Delay padrão menor para outros erros
-    return DELAYS.RATE_LIMIT_BACKOFF;
+    // Timeout fixo de 1 segundo entre tentativas de chunk
+    return 1000;
   }
 
   /**
@@ -838,7 +818,9 @@ export class TTSService {
           7: 'Famílias Italiano (IT)',
           8: 'Milionários Romeno (RO)',
           9: 'Bridgerton Brasileiro (PT-BR)',
-          10: 'Jornada dos Santos - Humano até Santificação (IT)'
+          10: 'Jornada dos Santos - Humano até Santificação (IT)',
+          11: 'Temática Sobrenatural',
+          12: 'Heróis de Guerra'
         };
         totalTimer.log(`📁 Código detectado: ${ytCode} → ${promptNames[promptType] || `Prompt tipo ${promptType}`}`);
       } else {
@@ -1010,7 +992,9 @@ Seja específico e detalhado para garantir consistência visual.`;
       7: 'Famílias Italiano (IT)',
       8: 'Milionários Romeno (RO)',
       9: 'Bridgerton Brasileiro (PT-BR)',
-      10: 'Jornada dos Santos - Humano até Santificação (IT)'
+      10: 'Jornada dos Santos - Humano até Santificação (IT)',
+      11: 'Temática Sobrenatural',
+      12: 'Heróis de Guerra'
     };
     
     console.log(`🎨 Usando prompt especializado: ${promptNames[promptType] || `Tipo ${promptType}`}`);
@@ -1458,11 +1442,11 @@ PROMPT CORRIGIDO:`;
   async generateThumbnails(cleanTitle: string, outputDir: string, promptType: number, count: number = 5): Promise<void> {
     console.log(`🎯 Criando ${count} thumbnails para: "${cleanTitle}"`);
 
-    // Gerar apenas 1 prompt baseado no título
-    console.log(`🎨 Gerando prompt único baseado no título...`);
+    // Usar título diretamente para gerar thumbnails
+    console.log(`🎨 Usando título diretamente para gerar thumbnails...`);
     const thumbnailPrompt = await this.generateSingleThumbnailPrompt(cleanTitle, promptType);
 
-    console.log(`📝 Prompt gerado: ${thumbnailPrompt.substring(0, 100)}...`);
+    console.log(`📝 Usando título: "${thumbnailPrompt}"`);
 
     let successfulThumbnails = 0;
     let failedThumbnails = 0;
@@ -1503,7 +1487,7 @@ PROMPT CORRIGIDO:`;
     try {
       console.log(`🎯 Criando thumbnail para: "${cleanTitle}"`);
 
-      // Gerar prompt único baseado no título
+      // Usar título diretamente
       const thumbnailPrompt = await this.generateSingleThumbnailPrompt(cleanTitle, promptType);
 
       // Gerar imagem com Whisk
@@ -1520,59 +1504,8 @@ PROMPT CORRIGIDO:`;
   }
 
   async generateSingleThumbnailPrompt(cleanTitle: string, promptType: number): Promise<string> {
-    const specializedPrompt = this.getSpecializedPrompt(promptType);
-
-    const prompt = `TÍTULO DA HISTÓRIA: "${cleanTitle}"
-ESTILO: ${this.getPromptStyleName(promptType)}
-
-Crie um prompt FOTORREALISTA de thumbnail baseado DIRETAMENTE na cena específica do título fornecido.
-
-OBRIGATÓRIO - FOTORREALISMO EXTREMO:
-- SEMPRE comece com "Photorealistic professional photograph"
-- SEMPRE inclua "shot with Canon EOS R5, 85mm f/1.4 lens, professional studio lighting"
-- SEMPRE especifique "ultra-realistic skin textures, pore-level detail, natural subsurface scattering"
-- SEMPRE inclua "cinematic color grading, shot on Arri Alexa, film grain texture"
-- NUNCA use "illustration", "art", "drawing", "cartoon", "animated", "digital art"
-- SEMPRE use "photograph of real person" ao invés de "image"
-
-FOCO NA CENA ESPECÍFICA DO TÍTULO:
-1. Analise o TÍTULO LITERALMENTE - identifique a situação, personagem ou evento específico
-2. Crie uma cena que REPRESENTA EXATAMENTE o que o título descreve
-3. FOQUE no MOMENTO CENTRAL da história mencionada no título
-4. Use DETALHES ESPECÍFICOS do contexto cultural/temporal do tipo de história
-5. PERSONALIZE baseado no que o título sugere (não use cenas genéricas)
-
-DETALHES TÉCNICOS OBRIGATÓRIOS:
-- "professional photography equipment, Phase One XF IQ4, Schneider Kreuznach lens"
-- "realistic facial expressions with micro-expressions, authentic human emotions"
-- "natural lighting setup with key light, fill light, rim light"
-- "sharp focus on eyes, shallow depth of field background blur"
-- "color temperature 5600K, professional color correction"
-
-Retorne APENAS o prompt da thumbnail focado na cena específica do título, uma linha completa e detalhada.`;
-
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `Você é um especialista em criar thumbnails de alta performance para YouTube. Sua especialidade é transformar títulos em prompts que geram imagens chamativas que maximizam CTR. Foque sempre em: rosto expressivo em primeiro plano, emoção intensa, contraste visual, elementos de curiosidade e mistério.`
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_tokens: 400,
-      temperature: 0.8
-    }, {
-      headers: {
-        'Authorization': `Bearer ${this.config.openaiApiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    return response.data.choices[0].message.content.trim();
+    // Simplesmente retorna o título limpo sem gerar prompt complexo com GPT
+    return cleanTitle;
   }
 
   async upscaleImageTo1920x1080(originalPath: string, outputDir: string, imageIndex: number): Promise<void> {

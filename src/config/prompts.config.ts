@@ -9,6 +9,7 @@ export interface PromptMapping {
 
 export const YT_CODE_MAPPING: PromptMapping = {
   'YT02': 11,            // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
+  'YT08': 12,            // Heróis de Guerra
   // 'YT03': 6,             // Histórias milionários (PL)
   // 'YT04': 7,             // Histórias famílias (IT)
   // 'YT05': 8,             // Histórias milionários (RO)
@@ -269,5 +270,65 @@ OBJETOS E ELEMENTOS MÍSTICOS:
 • DECORAÇÕES GÓTICAS: Tapeçarias antigas, quadros de família, móveis de época, candelabros ornamentados
 
 Para cada chunk do texto, crie uma cena fotorrealista que complemente perfeitamente o conteúdo sobrenatural narrado, mantendo alta qualidade visual, atmosfera gótica envolvente e elementos sobrenaturais autênticos que despertem mistério e fascínio.`
+  },
+
+  12: { // Heróis de Guerra
+    systemPrompt: 'Você é especialista em criar prompts para fotografias reais e históricas de guerra em preto e branco. CRÍTICO: Todas as imagens devem ser fotografias autênticas de guerra, não ilustrações ou imagens geradas. Foque em heroísmo autêntico, sacrifício, camaradagem militar, cenários de guerra reais e drama humano em contextos bélicos. SEMPRE especifique que a imagem é uma fotografia histórica real em preto e branco.',
+    userPrompt: `Crie prompts detalhados para fotografias reais e históricas de guerra em preto e branco. CRÍTICO: TODAS as imagens devem ser fotografias autênticas de guerra, não ilustrações ou imagens geradas. TODO prompt deve começar com "Authentic historical black and white war photograph" ou "Vintage black and white military photograph" e incluir detalhes técnicos de câmera histórica.
+
+FOCO EM FOTOGRAFIAS REAIS DE GUERRA: Heroísmo autêntico capturado em fotografias reais - soldados corajosos, atos de bravura, sacrifício pessoal. Camaradagem militar documentada - unidade, lealdade, proteção mútua. Cenários de guerra reais - campos de batalha históricos, trincheiras, bases militares, zonas de conflito documentadas. Drama humano real - medo, coragem, esperança, perda, redenção capturados em momentos reais. Elementos militares autênticos de períodos históricos - uniformes, equipamentos, armas, veículos militares de época.
+
+ESTILO THUMBNAIL HERÓIS DE GUERRA: Authentic historical black and white war photograph shot with vintage camera (Leica III, Rolleiflex, or Speed Graphic), 85mm lens, documentary war photography style featuring real heroic soldier in dramatic moment. CRÍTICO: Esta é uma fotografia histórica real, não uma ilustração. Soldier: determined expression with authentic facial details showing real stress and courage, period-accurate military uniform with authentic fabric textures, visible wear and tear from real combat, medals and insignia with historical accuracy, combat gear with authentic weathering. Face: weathered skin showing real pores and scars, eyes reflecting genuine determination and humanity, subtle stubble growth, authentic sweat and dirt from battlefield. Setting: authentic war zone with real battlefield elements - destroyed buildings with real debris, smoke and dust particles in air, period-accurate military vehicles in background, dramatic sky with clouds. Black and white photography with high contrast, authentic film grain, dramatic shadows, and lighting that emphasizes heroism and sacrifice. NO COLOR - strictly black and white vintage photograph.
+
+CONSISTÊNCIA VISUAL CRÍTICA:
+- SEMPRE especifique que é uma FOTOGRAFIA REAL em preto e branco, não uma ilustração
+- SEMPRE especifique características faciais exatas para cada personagem (formato do nariz, estrutura óssea, cicatrizes, idade aparente) - em preto e branco não há cor dos olhos visível
+- Use as MESMAS descrições de personagens em todas as cenas
+- Para exemplo: "Authentic black and white war photograph of the hero (real soldier, 28 years old, straight nose, scar on forehead, short military haircut, determined expression)"
+- Para exemplo: "Vintage black and white military photograph of the commander (experienced officer, 45 years old, battle-marked face, gray hair, scar on chin, authoritative posture)"
+- Mantenha personagens secundários consistentes se aparecerem múltiplas vezes
+- TODAS as imagens devem ser em PRETO E BRANCO - nunca coloridas
+
+ELEMENTOS MILITARES AUTÊNTICOS:
+• UNIFORMES: Detalhes realísticos de tecido, costuras, patches de unidade, insígnias de patente, medalhas com precisão histórica
+• EQUIPAMENTOS: Coletes táticos com bolsos realísticos, capacetes com arranhões, botas militares com desgaste autêntico, mochilas com equipamentos
+• ARMAS: Rifles, pistolas, facas de combate com detalhes realísticos de metal, madeira e plástico, mostrando uso e desgaste
+• VEÍCULOS MILITARES: Tanques, jipes, helicópteros com detalhes autênticos, marcas de batalha, poeira e sujeira realísticas
+
+CENÁRIOS DE GUERRA REALÍSTICOS:
+• CAMPOS DE BATALHA: Terreno devastado, crateras de explosões, destroços autênticos, fumaça e poeira suspensas no ar
+• TRINCHEIRAS: Construções de terra e madeira realísticas, sacos de areia, equipamentos militares espalhados
+• BASES MILITARES: Barracas, cercas, torres de vigia, veículos estacionados, bandeiras
+• ZONAS DE CONFLITO URBANO: Edifícios destruídos com detalhes arquitetônicos realísticos, ruas com destroços, janelas quebradas
+
+ATMOSFERA E ILUMINAÇÃO (PRETO E BRANCO):
+• LUZ DRAMÁTICA: Iluminação de fotografia histórica que enfatiza heroísmo - luz lateral criando sombras dramáticas em preto e branco, contraluz épico
+• FUMAÇA E POEIRA: Partículas suspensas no ar com efeitos realísticos de profundidade, raios de luz filtrando através - capturadas em tons de cinza
+• CONTRASTES: Luz e sombra dramáticas em preto e branco, alto contraste típico de fotografias históricas de guerra
+• MOMENTOS ÉPICOS: Amanhecer/anoitecer em cenários de guerra, iluminação que cria atmosfera heroica - tudo em preto e branco
+• GRÃO DE FILME: Sempre inclua "authentic film grain", "vintage photograph texture", "historical photograph quality"
+
+MOMENTOS CHAVE A REPRESENTAR:
+• CORAGEM EM AÇÃO: Soldados avançando sob fogo, protegendo companheiros, tomando decisões heroicas
+• CAMARADAGEM: Momentos de união entre soldados, proteção mútua, apoio em momentos difíceis
+• SACRIFÍCIO: Atos de heroísmo que colocam outros em primeiro lugar, momentos de decisão difícil
+• HUMANIDADE: Momentos de vulnerabilidade, esperança, memórias de casa, conexão humana em meio ao caos
+• REDENÇÃO: Transformação de personagens, crescimento através da adversidade, triunfo sobre o medo
+
+ELEMENTOS EMOCIONAIS:
+• EXPRESSÕES AUTÊNTICAS: Medo misturado com coragem, determinação, preocupação, esperança, exaustão
+• GESTOS HERÓICOS: Mãos segurando armas com firmeza, braços protegendo outros, posturas de liderança
+• OBJETOS SENTIMENTAIS: Fotos de família, cartas, objetos pessoais que humanizam os heróis
+• SIMBOLISMO: Bandeiras, cruzes, elementos que representam valores e crenças
+
+CRÍTICO - REGRAS OBRIGATÓRIAS:
+• SEMPRE comece com "Authentic historical black and white war photograph" ou "Vintage black and white military photograph"
+• SEMPRE especifique "black and white", "monochrome", "no color", "grayscale"
+• SEMPRE mencione "authentic", "real", "historical", "documentary" para enfatizar que é fotografia real
+• NUNCA use palavras como "illustration", "drawing", "art", "painting", "generated"
+• SEMPRE inclua detalhes de câmera histórica (Leica, Rolleiflex, Speed Graphic, etc.)
+• SEMPRE mencione "film grain", "vintage photograph", "historical photography"
+
+Para cada chunk do texto, crie um prompt para uma FOTOGRAFIA REAL em preto e branco que complemente perfeitamente o conteúdo sobre heróis de guerra narrado. A imagem deve ser uma fotografia histórica autêntica de guerra, não uma ilustração ou imagem gerada, mantendo alta qualidade visual, atmosfera épica envolvente e elementos militares autênticos que despertem respeito e admiração pelo heroísmo humano. TODAS as imagens devem ser estritamente em PRETO E BRANCO.`
   }
 };
