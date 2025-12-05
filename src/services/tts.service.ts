@@ -1780,8 +1780,8 @@ Linux/Mac:
           // NVIDIA NVENC
           ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_nvenc -preset ${renderSettings.preset} -tune ${renderSettings.tune} -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
         } else if (this.detectedVideoEncoder === 'h264_amf') {
-          // AMD AMF
-          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_amf -usage transcoding -quality speed -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
+          // AMD AMF - Controle de qualidade para evitar arquivos muito grandes
+          ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_amf -usage transcoding -quality balanced -rc cqp -qp 23 -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
         } else if (this.detectedVideoEncoder === 'h264_vaapi') {
           // VAAPI (Intel/AMD)
           ffmpegCommand = `ffmpeg -y -v error -loop 1 -i "${image}" -i "${audioFile}" -c:v h264_vaapi -qp 23 -c:a aac -b:a 192k -pix_fmt yuv420p -shortest "${segmentOutput}"`;
