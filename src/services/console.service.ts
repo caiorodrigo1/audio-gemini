@@ -343,12 +343,28 @@ export class ConsoleService {
     const findTxtFilesInFolder = async (folderPath: string): Promise<string[]> => {
       try {
         const entries = await fs.readdir(folderPath, { withFileTypes: true });
-        const txtFiles = entries
+        const txtFilePaths = entries
           .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.txt'))
-          .map(entry => path.join(folderPath, entry.name))
-          .sort(); // Ordenar alfabeticamente
+          .map(entry => path.join(folderPath, entry.name));
 
-        return txtFiles;
+        // Filtrar arquivos vazios (0kb)
+        const validTxtFiles: string[] = [];
+        for (const filePath of txtFilePaths) {
+          try {
+            const stats = await fs.stat(filePath);
+            if (stats.size > 0) {
+              validTxtFiles.push(filePath);
+            } else {
+              console.log(`⚠️  Ignorando arquivo vazio (0kb): ${path.basename(filePath)}`);
+            }
+          } catch (statError) {
+            console.warn(`⚠️  Não foi possível verificar tamanho do arquivo ${path.basename(filePath)}: ${statError.message}`);
+            // Incluir o arquivo mesmo assim se não conseguir verificar o tamanho
+            validTxtFiles.push(filePath);
+          }
+        }
+
+        return validTxtFiles.sort(); // Ordenar alfabeticamente
       } catch (error) {
         console.error(`Erro ao listar arquivos txt em ${folderPath}: ${error.message}`);
         return [];
@@ -360,6 +376,13 @@ export class ConsoleService {
       try {
         const fileInfo = fileNumber && totalFiles ? ` [${fileNumber}/${totalFiles}]` : '';
         console.log(`\nLendo arquivo${fileInfo}: ${filePath}`);
+        
+        // Verificar se o arquivo está vazio (0kb) antes de processar
+        const stats = await fs.stat(filePath);
+        if (stats.size === 0) {
+          console.log(`⚠️  Arquivo vazio (0kb) ignorado: ${path.basename(filePath)}`);
+          return;
+        }
         
         const fileContent = await fs.readFile(filePath, 'utf-8');
         console.log(`Arquivo lido com ${fileContent.length} caracteres`);
