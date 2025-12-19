@@ -449,16 +449,54 @@ export class ConsoleService {
       }
     };
 
-    // Iniciar processamento automático imediatamente
-    try {
-      await processFolderAuto(selectedPath);
-      console.log('\n🎉 TODOS OS ARQUIVOS FORAM PROCESSADOS COM SUCESSO!');
-      console.log('\n💡 DICAS:');
-      console.log('• Use RENDER para renderizar vídeos das pastas criadas');
-      console.log('• Verifique as pastas geradas para ver os arquivos criados');
-      console.log('• Execute novamente o programa para processar novos arquivos');
-    } catch (error) {
-      console.error('\n❌ ERRO NO PROCESSAMENTO:', error.message);
+    // Interface para interações simples no console (menu final)
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    let keepRunning = true;
+
+    while (keepRunning) {
+      // Iniciar processamento automático
+      try {
+        await processFolderAuto(selectedPath);
+        console.log('\n🎉 TODOS OS ARQUIVOS FORAM PROCESSADOS COM SUCESSO!');
+
+        // Resumo das API keys esgotadas nesta execução
+        const summary = this.ttsService.getExhaustedKeysSummary();
+        console.log(`\n🔑 API keys esgotadas nesta execução: ${summary.exhaustedCount}/${summary.totalKeys}`);
+        if (summary.exhaustedCount > 0) {
+          console.log(`   Índices das keys esgotadas: ${summary.exhaustedIndexes.map(i => i + 1).join(', ')}`);
+        }
+
+        console.log('\n💡 DICAS:');
+        console.log('• Use RENDER para renderizar vídeos das pastas criadas');
+        console.log('• Verifique as pastas geradas para ver os arquivos criados');
+        console.log('• Adicione novos arquivos .txt nas pastas YT* para novo processamento');
+      } catch (error) {
+        console.error('\n❌ ERRO NO PROCESSAMENTO:', error.message);
+      }
+
+      // Menu final: continuar ou sair
+      const answer: string = await new Promise((resolve) => {
+        console.log('\nO que você deseja fazer agora?');
+        console.log('  1 - Procurar novos arquivos .txt e processar novamente');
+        console.log('  2 - Encerrar a aplicação');
+        rl.question('Escolha (1/2): ', (resp: string) => resolve(resp));
+      });
+
+      const choice = (answer || '2').trim();
+
+      if (choice === '1') {
+        console.log('\n🔄 Reescanear pastas YT e procurar novos arquivos .txt...');
+        // Loop continua, chamando processFolderAuto novamente
+      } else {
+        console.log('\n👋 Encerrando aplicação conforme solicitado...');
+        keepRunning = false;
+      }
     }
+
+    rl.close();
   }
 }

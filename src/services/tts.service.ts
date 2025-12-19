@@ -26,6 +26,8 @@ export class TTSService {
   private renderPreset: RenderPreset = 'standard'; // Preset de renderização (standard ou fast)
   private detectedVideoEncoder: string = 'libx264'; // Encoder de vídeo detectado (NVIDIA/AMD/CPU)
   private cachedVideoEncoder: string | null = null; // Cache do encoder detectado
+  // API keys que ficaram RESOURCE_EXHAUSTED durante a execução atual
+  private exhaustedApiKeys = new Set<number>();
 
   constructor(
     private readonly whiskAuthService: WhiskAuthService,
@@ -217,6 +219,17 @@ export class TTSService {
     return this.config.googleApiKeys.length;
   }
 
+  getExhaustedKeysSummary(): { totalKeys: number; exhaustedCount: number; exhaustedIndexes: number[] } {
+    const totalKeys = this.apiKeys.length;
+    const exhaustedIndexes = Array.from(this.exhaustedApiKeys.values());
+
+    return {
+      totalKeys,
+      exhaustedCount: exhaustedIndexes.length,
+      exhaustedIndexes
+    };
+  }
+
   splitTextIntoChunks(text: string): TextChunk[] {
     console.log(`Texto recebido com ${text.length} caracteres`);
     const cleanText = text.replace(/["""]/g, '').replace(/[''']/g, '');
@@ -271,17 +284,15 @@ export class TTSService {
     const totalKeys = this.apiKeys.length;
     const maxRetries = totalKeys * RETRY_CONFIG.MAX_RETRIES_PER_KEY;
     let lastError: any;
-    // Rastrear quais keys já falharam com resource exhausted
-    const exhaustedKeys = new Set<number>();
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       // Rotação através de TODAS as API keys disponíveis
       const baseKeyIndex = chunk.chunkIndex % totalKeys;  // API key base do chunk
       const apiKeyIndex = (baseKeyIndex + attempt) % totalKeys;  // Rotaciona através de TODAS as keys
 
-      // Pular keys que já falharam com resource exhausted
-      if (exhaustedKeys.has(apiKeyIndex)) {
-        this.logger.debug(`Pulando API key ${apiKeyIndex + 1} (já esgotada)`);
+      // Pular keys que já foram marcadas como esgotadas (RESOURCE_EXHAUSTED) durante esta execução
+      if (this.exhaustedApiKeys.has(apiKeyIndex)) {
+        this.logger.debug(`Pulando API key ${apiKeyIndex + 1} (já marcada como RESOURCE_EXHAUSTED nesta execução)`);
         continue;
       }
 
@@ -375,10 +386,10 @@ export class TTSService {
                                    error.response?.data?.[0]?.error?.status === 'RESOURCE_EXHAUSTED' ||
                                    (error.message && error.message.includes('RESOURCE_EXHAUSTED'));
 
-        // Marcar esta key como esgotada se for resource exhausted
+        // Marcar esta key como esgotada se for resource exhausted (global para toda a execução)
         if (isResourceExhausted) {
-          exhaustedKeys.add(apiKeyIndex);
-          this.logger.warn(`Resource exhausted detectado na API key ${apiKeyIndex + 1} - não tentará novamente`);
+          this.exhaustedApiKeys.add(apiKeyIndex);
+          this.logger.warn(`Resource exhausted detectado na API key ${apiKeyIndex + 1} - não será mais usada nesta execução`);
         }
 
         if (isRateLimit || isQuotaError || isResourceExhausted) {
@@ -402,8 +413,8 @@ export class TTSService {
       }
     }
     
-    const exhaustedCount = exhaustedKeys.size;
-    const actualAttempts = exhaustedCount > 0 ? totalKeys : maxRetries / totalKeys;
+    const exhaustedCount = this.exhaustedApiKeys.size;
+    const actualAttempts = maxRetries / totalKeys;
     this.logger.error(`Todas as ${maxRetries} tentativas falharam para chunk ${chunk.chunkIndex + 1}`);
     this.logger.error(`Tentaram-se todas as ${totalKeys} API keys disponíveis (${actualAttempts} tentativa(s) por key)`);
     if (exhaustedCount > 0) {

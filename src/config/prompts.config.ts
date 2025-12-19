@@ -10,6 +10,7 @@ export interface PromptMapping {
 export const YT_CODE_MAPPING: PromptMapping = {
   'YT02': 11,            // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
   'YT08': 12,            // Heróis de Guerra
+  'YT09': 13,            // Espionagem - MOSSAD (acontecimentos reais, Guerra Fria)
   // 'YT03': 6,             // Histórias milionários (PL)
   // 'YT04': 7,             // Histórias famílias (IT)
   // 'YT05': 8,             // Histórias milionários (RO)
@@ -330,5 +331,87 @@ CRÍTICO - REGRAS OBRIGATÓRIAS:
 • SEMPRE mencione "film grain", "vintage photograph", "historical photography"
 
 Para cada chunk do texto, crie um prompt para uma FOTOGRAFIA REAL em preto e branco que complemente perfeitamente o conteúdo sobre heróis de guerra narrado. A imagem deve ser uma fotografia histórica autêntica de guerra, não uma ilustração ou imagem gerada, mantendo alta qualidade visual, atmosfera épica envolvente e elementos militares autênticos que despertem respeito e admiração pelo heroísmo humano. TODAS as imagens devem ser estritamente em PRETO E BRANCO.`
+  },
+
+  13: { // Espionagem - MOSSAD (acontecimentos reais, Guerra Fria)
+    systemPrompt: 'Você é especialista em criar prompts fotorrealistas para histórias de espionagem baseadas em acontecimentos reais, focadas no MOSSAD de Israel durante a Guerra Fria. CRÍTICO: Todas as imagens devem parecer fotografias reais tiradas escondidas (surveillance photography), com ângulos discretos, iluminação baixa e atmosfera de espionagem autêntica. Foque em realismo documental, operações secretas reais e drama humano em contextos de inteligência.',
+    userPrompt: `Crie prompts fotorrealistas detalhados para histórias de espionagem do MOSSAD baseadas em acontecimentos reais. CRÍTICO: TODAS as imagens devem parecer FOTOGRAFIAS REAIS TIRADAS ESCONDIDAS (surveillance/covert photography), não ilustrações. TODO prompt deve começar com "Photorealistic covert surveillance photograph" ou "Authentic hidden camera photograph" e incluir detalhes técnicos de câmera de vigilância.
+
+FOCO EM FOTOGRAFIAS DE ESPIONAGEM REAIS: Operações secretas do MOSSAD documentadas - agentes em ação, infiltrações, extrações, assassinatos seletivos. Acontecimentos reais da Guerra Fria - Berlim dividida, Oriente Médio, Europa, África. Atmosfera de espionagem autêntica - tensão, perigo, sigilo, inteligência. Drama humano real - lealdade, traição, sacrifício, decisões morais complexas. Elementos de espionagem autênticos - documentos secretos, equipamentos de vigilância, disfarces, armas silenciosas, veículos não identificados.
+
+ESTILO THUMBNAIL ESPIONAGEM MOSSAD: Photorealistic covert surveillance photograph shot with hidden camera (Minox, micro-camera, or telephoto lens from distance), 200mm telephoto lens, documentary surveillance photography style featuring real MOSSAD agent in dramatic covert operation moment. CRÍTICO: Esta é uma fotografia real tirada escondida, não uma ilustração. Agent: determined expression with authentic facial details showing real tension and focus, period-accurate civilian clothing (1970s-1980s) with authentic fabric textures, subtle tactical gear hidden under clothing, realistic watch, briefcase or equipment bag. Face: weathered skin showing real pores and stress lines, eyes reflecting genuine alertness and intelligence, subtle disguise elements (glasses, hat, facial hair), authentic micro-expressions of concentration. Setting: authentic Cold War location - divided Berlin street with Checkpoint Charlie in background, Middle Eastern city with period architecture, European safe house, airport terminal. Shot from hidden angle - through window, from rooftop, across street, or from vehicle. Low light conditions typical of surveillance - street lamps, neon signs, dim interior lighting. Professional color grading with desaturated tones, high contrast shadows, and authentic surveillance photography aesthetic. Film grain texture matching period surveillance cameras.
+
+CONSISTÊNCIA VISUAL CRÍTICA:
+- SEMPRE especifique que é uma FOTOGRAFIA REAL TIRADA ESCONDIDA, não uma ilustração
+- SEMPRE especifique características faciais exatas para cada personagem (formato do nariz, estrutura óssea, idade aparente, estilo de cabelo)
+- Use as MESMAS descrições de personagens em todas as cenas
+- Para exemplo: "Covert surveillance photograph of the MOSSAD agent (real operative, 35 years old, straight nose, scar on left hand, short dark hair, intense brown eyes, wearing civilian suit)"
+- Para exemplo: "Hidden camera photograph of the target (real person, 45 years old, distinctive features, period-accurate clothing, unaware of surveillance)"
+- Mantenha personagens secundários consistentes se aparecerem múltiplas vezes
+- SEMPRE especifique o ângulo de vigilância (through window, from rooftop, across street, from vehicle, etc.)
+
+ELEMENTOS DE ESPIONAGEM AUTÊNTICOS:
+• EQUIPAMENTOS: Câmeras Minox, micro-câmeras escondidas, binóculos, gravadores ocultos, transmissores, equipamentos de disfarce
+• DOCUMENTOS SECRETOS: Arquivos classificados, fotografias de alvos, mapas anotados, códigos, passaportes falsos
+• DISFARCES: Roupas civis autênticas da época, perucas, óculos, bigodes postiços, mudanças de identidade
+• ARMAS SILENCIOSAS: Pistolas com silenciador, facas, venenos, armas improvisadas
+• VEÍCULOS: Carros não identificados, vans de vigilância, motocicletas, veículos de fuga
+
+CENÁRIOS DA GUERRA FRIA:
+• BERLIM DIVIDIDA: Checkpoint Charlie, Muro de Berlim, ruas divididas, pontos de encontro, zonas neutras
+• ORIENTE MÉDIO: Cidades israelenses, bases árabes, hotéis internacionais, aeroportos, embaixadas
+• EUROPA: Cidades europeias durante Guerra Fria, embaixadas, cafés, estações de trem, hotéis
+• ÁFRICA: Operações em países africanos, desertos, cidades, bases secretas
+• AMÉRICA: Operações em continente americano, embaixadas, cidades, pontos de encontro
+
+ÂNGULOS DE VIGILÂNCIA (CRÍTICO):
+• ATRAVÉS DE JANELA: Shot through window glass with reflections, from inside building observing target outside
+• DE TELHADO: High angle shot from rooftop, observing street or building below
+• DO OUTRO LADO DA RUA: Long distance telephoto shot across street, subject unaware
+• DE VEÍCULO: Shot from inside parked car, through windshield or side window
+• DE ESCONDERIJO: Shot from behind cover (doorway, corner, vegetation), partially obscured view
+• DE CIMA: Overhead angle from building, staircase, or elevated position
+• DE LADO: Profile shot from side angle, subject in profile or three-quarter view
+• DE TRÁS: Shot from behind, following subject, back of head visible
+
+ATMOSFERA E ILUMINAÇÃO (FOTOGRAFIAS DE VIGILÂNCIA):
+• ILUMINAÇÃO BAIXA: Luz noturna, lâmpadas de rua, neon, iluminação interior fraca, sombras profundas
+• CONTRASTE ALTO: Luz e sombra dramáticas, típico de fotografias de vigilância noturna
+• GRÃO DE FILME: Sempre inclua "authentic film grain", "surveillance camera texture", "covert photography quality"
+• CORES DESATURADAS: Tons terrosos, verdes oliva, cinzas, cores que enfatizam realismo documental
+• EFEITOS DE CÂMERA: Reflexos em vidros, distorção de lente telephoto, profundidade de campo rasa
+
+MOMENTOS CHAVE A REPRESENTAR:
+• INFILTRAÇÃO: Agente entrando em local proibido, usando disfarce, evitando detecção
+• VIGILÂNCIA: Observando alvo de longa distância, documentando movimentos, coletando informações
+• EXTRAÇÃO: Resgatando pessoa de local perigoso, operação de fuga, evacuação secreta
+• ASSASSINATO SELETIVO: Operação de eliminação, momento crítico, execução discreta
+• REUNIÃO SECRETA: Encontro com informante, troca de informações, negociação
+• FUGA: Escapando de situação perigosa, perseguição, evasão
+
+ELEMENTOS EMOCIONAIS:
+• TENSÃO: Expressões de alerta, nervosismo controlado, foco intenso
+• DETERMINAÇÃO: Olhos fixos, postura resoluta, mãos firmes
+• VIGILÂNCIA: Olhando ao redor, verificando se está sendo observado, cautela constante
+• INTELIGÊNCIA: Expressão calculista, analisando situação, tomando decisões rápidas
+
+CRÍTICO - REGRAS OBRIGATÓRIAS:
+• SEMPRE comece com "Photorealistic covert surveillance photograph" ou "Authentic hidden camera photograph"
+• SEMPRE especifique o ângulo de vigilância (through window, from rooftop, across street, from vehicle, etc.)
+• SEMPRE mencione "covert", "surveillance", "hidden camera", "secret photograph" para enfatizar que é fotografia escondida
+• SEMPRE inclua detalhes de câmera de vigilância (Minox, telephoto lens, micro-camera, etc.)
+• SEMPRE mencione "film grain", "surveillance photography", "covert documentation"
+• NUNCA use palavras como "illustration", "drawing", "art", "painting", "generated"
+• SEMPRE especifique que o sujeito está "unaware" ou "being observed" quando apropriado
+• SEMPRE inclua elementos que indiquem que é uma foto tirada escondida (reflexos, ângulos discretos, distância)
+
+ELEMENTOS ESPECÍFICOS DO MOSSAD:
+• AGENTES ISRAELENSES: Características físicas diversas, treinamento intenso visível na postura, equipamentos israelenses
+• OPERAÇÕES REAIS: Operação Wrath of God, Operação Entebbe, Operação Spring of Youth, Operação Cólera de Deus
+• LOCAIS HISTÓRICOS: Munique, Beirute, Paris, Roma, Londres, cidades europeias e do Oriente Médio
+• PERÍODO: 1960s-1980s principalmente, Guerra Fria, pós-Segunda Guerra Mundial
+• ALVOS: Terroristas, ex-nazistas, cientistas nucleares, traidores, inimigos do Estado de Israel
+
+Para cada chunk do texto, crie um prompt para uma FOTOGRAFIA REAL TIRADA ESCONDIDA que complemente perfeitamente o conteúdo sobre espionagem do MOSSAD narrado. A imagem deve ser uma fotografia autêntica de vigilância/espionagem, não uma ilustração ou imagem gerada, mantendo alta qualidade visual, atmosfera tensa envolvente e elementos de espionagem autênticos que despertem suspense e fascínio pela realidade das operações secretas. TODAS as imagens devem parecer fotografias reais tiradas escondidas com ângulos discretos e iluminação de vigilância.`
   }
 };
