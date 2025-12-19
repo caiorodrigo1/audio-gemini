@@ -4,6 +4,7 @@ import * as readline from 'readline';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import { RenderPreset } from '../config/render.config';
+import { DELAYS } from '../constants';
 
 @Injectable()
 export class ConsoleService {
@@ -29,6 +30,55 @@ export class ConsoleService {
         resolve(trimmedToken);
       });
     });
+  }
+
+  async renderOnly(folderPath: string, renderPreset?: RenderPreset): Promise<void> {
+    console.log('\n🎬 MODO RENDERIZAÇÃO APENAS');
+    console.log('===========================');
+    console.log(`📁 Pasta para renderizar: ${folderPath}`);
+    console.log('');
+
+    // Conectar o TTS service com este console service
+    this.ttsService.setConsoleService(this);
+
+    // Configurar preset de renderização se fornecido
+    if (renderPreset !== undefined) {
+      this.ttsService.setRenderPreset(renderPreset);
+      console.log(`🎬 Preset de renderização: ${renderPreset}`);
+    } else {
+      // Usar preset fast por padrão para velocidade
+      this.ttsService.setRenderPreset('fast');
+      console.log(`🎬 Preset de renderização: fast (padrão)`);
+    }
+
+    console.log('');
+
+    try {
+      // Verificar se a pasta existe
+      try {
+        const stats = await fs.stat(folderPath);
+        if (!stats.isDirectory()) {
+          console.error(`❌ O caminho especificado não é uma pasta: ${folderPath}`);
+          process.exit(1);
+        }
+      } catch (error) {
+        console.error(`❌ Pasta não encontrada: ${folderPath}`);
+        console.error(`   Erro: ${error.message}`);
+        process.exit(1);
+      }
+
+      // Renderizar o vídeo
+      console.log('🎬 Iniciando renderização do vídeo...');
+      const videoPath = await this.ttsService.retryVideoRendering(folderPath);
+      
+      console.log(`\n✅ Renderização concluída com sucesso!`);
+      console.log(`📁 Vídeo salvo em: ${videoPath}`);
+      console.log('');
+
+    } catch (error) {
+      console.error(`\n❌ Erro ao renderizar vídeo: ${error.message}`);
+      process.exit(1);
+    }
   }
 
 
@@ -135,28 +185,30 @@ export class ConsoleService {
   }
 
 
-  async start(useFishAudio: boolean = false, concurrentBatches?: number, renderPreset?: RenderPreset): Promise<void> {
+  async start(useFishAudio: boolean = false, concurrentBatches?: number, renderPreset?: RenderPreset, customPath?: string): Promise<void> {
     // Conectar o TTS service com este console service e informar se deve usar Fish Audio
     this.ttsService.setConsoleService(this);
     await this.ttsService.setUseFishAudio(useFishAudio);
 
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-
-    // Perguntar se quer usar o modo padrão ou personalizado
     const defaultPath = 'D:\\Canais Dark\\CanaisAtivos';
-    const useDefault = await this.promptForModeSelection(rl, defaultPath);
-
-    let selectedPath: string;
-    if (useDefault) {
-      selectedPath = defaultPath;
-      console.log(`\n✅ Usando caminho padrão: ${selectedPath}`);
+    
+    // Usar caminho personalizado se fornecido, senão usar padrão
+    const selectedPath = customPath || defaultPath;
+    
+    console.log('\n🚀 AUDIO GEMINI TTS - INICIANDO AUTOMATICAMENTE');
+    console.log('================================================');
+    console.log(`📁 Caminho selecionado: ${selectedPath}`);
+    if (customPath) {
+      console.log('   (Caminho personalizado fornecido via --path=)');
     } else {
-      selectedPath = await this.promptForCustomPath(rl);
-      console.log(`\n✅ Usando caminho personalizado: ${selectedPath}`);
+      console.log('   (Caminho padrão - use --path="caminho" para personalizar)');
     }
+    console.log('');
+    console.log('💡 Para usar um caminho personalizado, execute:');
+    console.log('   npm start -- --path="D:\\Seu\\Caminho\\Personalizado"');
+    console.log('   ou');
+    console.log('   npm start -- --custom-path="D:\\Seu\\Caminho\\Personalizado"');
+    console.log('');
 
     // Detectar automaticamente o número máximo de batches baseado nas API keys disponíveis
     let finalBatches = concurrentBatches;
@@ -192,21 +244,14 @@ export class ConsoleService {
       this.ttsService.setRenderPreset(finalRenderPreset);
     }
 
-    console.log('\n=== Audio Gemini TTS Console ===');
-    console.log(`📁 Caminho selecionado: ${selectedPath}`);
-    console.log('Escaneando automaticamente todas as pastas YT* e processando arquivos .txt...');
-    console.log('');
-    console.log('💡 Comandos disponíveis:');
-    console.log('  exit    : Sair da aplicação');
-    console.log('  RENDER "C:\\caminho\\da\\pasta" : Renderizar vídeo de uma pasta específica');
-    console.log('');
     console.log('💡 Configurações ativas:');
     console.log(`  • Fish Audio: ${useFishAudio ? 'Ativado' : 'Desativado'}`);
     console.log(`  • API Keys disponíveis: ${this.ttsService.getApiKeysCount()}`);
     console.log(`  • Batches simultâneos: ${finalBatches || (useFishAudio ? 1 : this.ttsService.getApiKeysCount())}`);
     console.log(`  • Preset de renderização: ${finalRenderPreset || 'standard'}`);
     console.log('');
-    
+    console.log('Escaneando automaticamente todas as pastas YT* e processando arquivos .txt...');
+    console.log('');
 
     const processFolderAuto = async (rootFolder: string) => {
       try {
@@ -267,8 +312,9 @@ export class ConsoleService {
 
           // Pequeno delay entre arquivos
           if (i < allTxtFiles.length - 1) {
-            console.log('\n⏳ Aguardando 3 segundos antes do próximo arquivo...');
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            const delaySeconds = (DELAYS.BETWEEN_FILES / 1000).toFixed(0);
+            console.log(`\n⏳ Aguardando ${delaySeconds} segundos antes do próximo arquivo...`);
+            await new Promise(resolve => setTimeout(resolve, DELAYS.BETWEEN_FILES));
           }
         }
 
@@ -320,7 +366,7 @@ export class ConsoleService {
         
         // Usar o diretório do arquivo como base
         const baseDir = path.dirname(filePath);
-        await processText(fileContent, baseDir, filePath);
+        await processText(fileContent, baseDir, filePath, fileNumber, totalFiles);
         
       } catch (error) {
         console.error('\n❌ Erro ao ler arquivo:', error.message);
@@ -367,11 +413,11 @@ export class ConsoleService {
       return finalPath;
     };
 
-    const processText = async (text: string, baseDir?: string, filePath?: string) => {
+    const processText = async (text: string, baseDir?: string, filePath?: string, fileNumber?: number, totalFiles?: number) => {
       try {
         console.log('\nProcessando texto...');
         const outputDir = await createDateTimeFolder(baseDir, filePath);
-        const savedFiles = await this.ttsService.processTextToSpeech(text, outputDir, filePath);
+        const savedFiles = await this.ttsService.processTextToSpeech(text, outputDir, filePath, fileNumber, totalFiles);
         
         console.log('\n✅ Conversão concluída com sucesso!');
         console.log(`📁 Arquivos salvos em: ${outputDir}`);
@@ -403,19 +449,54 @@ export class ConsoleService {
       }
     };
 
-    // Iniciar processamento automático imediatamente
-    try {
-      await processFolderAuto(selectedPath);
-      console.log('\n🎉 TODOS OS ARQUIVOS FORAM PROCESSADOS COM SUCESSO!');
-      console.log('\n💡 DICAS:');
-      console.log('• Use RENDER para renderizar vídeos das pastas criadas');
-      console.log('• Verifique as pastas geradas para ver os arquivos criados');
-      console.log('• Execute novamente o programa para processar novos arquivos');
-    } catch (error) {
-      console.error('\n❌ ERRO NO PROCESSAMENTO:', error.message);
+    // Interface para interações simples no console (menu final)
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    let keepRunning = true;
+
+    while (keepRunning) {
+      // Iniciar processamento automático
+      try {
+        await processFolderAuto(selectedPath);
+        console.log('\n🎉 TODOS OS ARQUIVOS FORAM PROCESSADOS COM SUCESSO!');
+
+        // Resumo das API keys esgotadas nesta execução
+        const summary = this.ttsService.getExhaustedKeysSummary();
+        console.log(`\n🔑 API keys esgotadas nesta execução: ${summary.exhaustedCount}/${summary.totalKeys}`);
+        if (summary.exhaustedCount > 0) {
+          console.log(`   Índices das keys esgotadas: ${summary.exhaustedIndexes.map(i => i + 1).join(', ')}`);
+        }
+
+        console.log('\n💡 DICAS:');
+        console.log('• Use RENDER para renderizar vídeos das pastas criadas');
+        console.log('• Verifique as pastas geradas para ver os arquivos criados');
+        console.log('• Adicione novos arquivos .txt nas pastas YT* para novo processamento');
+      } catch (error) {
+        console.error('\n❌ ERRO NO PROCESSAMENTO:', error.message);
+      }
+
+      // Menu final: continuar ou sair
+      const answer: string = await new Promise((resolve) => {
+        console.log('\nO que você deseja fazer agora?');
+        console.log('  1 - Procurar novos arquivos .txt e processar novamente');
+        console.log('  2 - Encerrar a aplicação');
+        rl.question('Escolha (1/2): ', (resp: string) => resolve(resp));
+      });
+
+      const choice = (answer || '2').trim();
+
+      if (choice === '1') {
+        console.log('\n🔄 Reescanear pastas YT e procurar novos arquivos .txt...');
+        // Loop continua, chamando processFolderAuto novamente
+      } else {
+        console.log('\n👋 Encerrando aplicação conforme solicitado...');
+        keepRunning = false;
+      }
     }
 
-    // Fechar interface readline
     rl.close();
   }
 }

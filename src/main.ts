@@ -28,6 +28,14 @@ async function bootstrap() {
     }
   }
   
+  // Verificar se foi passado o parâmetro --path= ou --custom-path=
+  const pathArg = process.argv.find(arg => arg.startsWith('--path=') || arg.startsWith('--custom-path='));
+  const customPath = pathArg ? pathArg.split('=')[1] : undefined;
+  
+  // Verificar se foi passado o parâmetro --render= para renderizar apenas
+  const renderArg = process.argv.find(arg => arg.startsWith('--render='));
+  const renderPath = renderArg ? renderArg.split('=')[1] : undefined;
+  
   if (useFishAudio) {
     console.log('🐟 Modo Fish Audio ativado - usando API alternativa para geração de áudio');
   }
@@ -44,7 +52,16 @@ async function bootstrap() {
     console.log('⚡ Modo de renderização rápida ativado (preset p1) - reduz tempo pela metade mantendo qualidade');
   }
   
-  await consoleService.start(useFishAudio, concurrentBatches, renderPreset);
+  if (customPath) {
+    console.log(`📁 Caminho personalizado fornecido: ${customPath}`);
+  }
+  
+  // Se --render foi passado, apenas renderizar
+  if (renderPath) {
+    await consoleService.renderOnly(renderPath, renderPreset);
+  } else {
+    await consoleService.start(useFishAudio, concurrentBatches, renderPreset, customPath);
+  }
 }
 
 bootstrap();
