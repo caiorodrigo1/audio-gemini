@@ -11,12 +11,12 @@ export const YT_CODE_MAPPING: PromptMapping = {
   'YT02': 11,            // Temática Sobrenatural (vampiros, bruxas, caçadores, imortais, dinastias antigas)
   'YT08': 12,            // Heróis de Guerra
   'YT09': 13,            // Espionagem - MOSSAD (acontecimentos reais, Guerra Fria)
+  'YT11': 14,            // Piratas
+  'YT12': 15,            // Japão Feudal
   // 'YT03': 6,             // Histórias milionários (PL)
   // 'YT04': 7,             // Histórias famílias (IT)
   // 'YT05': 8,             // Histórias milionários (RO)
   // 'YT06': 9,             // Bridgerton Brasileiro (PT-BR)
-  // 'YT11': 1,             // Wild West (EN-US)
-  // 'YT12': 2,             // Crônicas old man (EN-US)
   // 'YT13': 3,             // Pessoas desaparecidas (PT-BR)
   // 'YT18': 10,            // Santos Católicos - Jornada Humana até Santificação (IT)
   // 'D01': 11,               
@@ -413,5 +413,69 @@ ELEMENTOS ESPECÍFICOS DO MOSSAD:
 • ALVOS: Terroristas, ex-nazistas, cientistas nucleares, traidores, inimigos do Estado de Israel
 
 Para cada chunk do texto, crie um prompt para uma FOTOGRAFIA REAL TIRADA ESCONDIDA que complemente perfeitamente o conteúdo sobre espionagem do MOSSAD narrado. A imagem deve ser uma fotografia autêntica de vigilância/espionagem, não uma ilustração ou imagem gerada, mantendo alta qualidade visual, atmosfera tensa envolvente e elementos de espionagem autênticos que despertem suspense e fascínio pela realidade das operações secretas. TODAS as imagens devem parecer fotografias reais tiradas escondidas com ângulos discretos e iluminação de vigilância.`
+  },
+
+  14: { // Piratas
+    systemPrompt: 'Você é especialista em criar prompts FOTORREALISTAS para histórias de piratas. Foque em navios piratas autênticos, mares revoltos, portos perigosos, tesouros escondidos e rostos marcados pela vida no mar. Mantenha sempre um visual cinematográfico, com luz dramática e muitos detalhes de textura (madeira, metal, tecido molhado, pele queimada de sol).',
+    userPrompt: `Crie prompts fotorrealistas detalhados para histórias de piratas. TODO prompt deve começar com "Photorealistic" e incluir detalhes técnicos de câmera.
+
+FOCO PIRATAS: Navios piratas de madeira com velas rasgadas, canhões, cordas grossas, barris. Piratas com rostos marcados pelo sol e pelo sal, cicatrizes, barbas, tatuagens, roupas surradas. Mares revoltos, tempestades, céu dramático, ilhas tropicais, portos cheios de tabernas e perigos.
+
+ESTILO THUMBNAIL PIRATAS: Photorealistic professional photograph shot with Canon EOS R5, 35mm f/1.4 lens, cinematic wide shot mostrando capitão pirata em posição de liderança na proa do navio. Capitão: homem de 35-50 anos, pele queimada de sol, cicatriz visível no rosto, barba espessa, olhos intensos, chapéu tricorne, casaco de couro envelhecido, faixa colorida na cintura, brinco de ouro. Fundo: navio pirata completo com velas rasgadas, bandeira negra com caveira tremulando, mar agitado com ondas realistas, céu dramático com nuvens densas. Iluminação dourada de pôr do sol ou luz tempestuosa, água com reflexos realistas, gotas e respingos detalhados.
+
+CONSISTÊNCIA VISUAL CRÍTICA:
+- SEMPRE descreva detalhadamente o rosto do capitão pirata (idade aparente, formato do rosto, barba, cicatrizes, cor dos olhos, expressão)
+- Use SEMPRE as mesmas características para o capitão principal em todas as cenas
+- Mantenha tripulação com traços consistentes quando reaparecerem (cicatrizes, acessórios, etnias variadas)
+
+ELEMENTOS PIRATAS AUTÊNTICOS:
+• NAVIOS: Convés de madeira com textura realista, mastros, velas, cordas, canhões alinhados, correntes, âncora
+• VISUAL: Chapéus tricorne, bandanas, coletes de couro, camisas largas, cinturões com pistolas e espadas, botas de couro gasto
+• ARMAS: Espadas, sabres, pistolas de pederneira, mosquetes, facas
+• OBJETOS: Baús de tesouro com moedas de ouro, mapas antigos, bússolas, garrafas de rum, pergaminhos
+
+CENÁRIOS:
+• ALTO MAR: Navio em tempestade, mar revolto, relâmpagos, neblina
+• PORTOS PIRATAS: Tabernas cheias, becos escuros, mercados perigosos
+• ILHAS: Praias de areia branca, cavernas escondidas, florestas densas, locais de tesouro enterrado
+
+ATMOSFERA E ILUMINAÇÃO:
+• LUZ DRAMÁTICA: Pôr do sol épico, tempestades, contraluz sobre as velas
+• TEXTURAS: Madeira molhada, metais enferrujados, couro gasto, tecidos rasgados
+• EFEITOS: Spray de água, névoa marítima, fumaça de canhões
+
+Para cada chunk do texto, crie uma cena fotorrealista que complemente perfeitamente o conteúdo narrado, destacando aventura, perigo, ganância e camaradagem entre piratas.`
+  },
+
+  15: { // Japão Feudal
+    systemPrompt: 'Você é especialista em criar prompts FOTORREALISTAS para histórias ambientadas no Japão Feudal. Foque em samurais, ninjas, aldeias tradicionais, castelos japoneses, templos, armaduras detalhadas e paisagens com cerejeiras, neblina e montanhas. O visual deve remeter ao cinema épico japonês, com composições elegantes e respeito à cultura e estética japonesas.',
+    userPrompt: `Crie prompts fotorrealistas detalhados para histórias ambientadas no Japão Feudal. TODO prompt deve começar com "Photorealistic" e incluir detalhes técnicos de câmera.
+
+FOCO JAPÃO FEUDAL: Samurais em armaduras detalhadas, katanas, ninjas em roupas escuras, monges, camponeses, senhores feudais (daimyos). Castelos japoneses, vilarejos de madeira, campos de arroz, templos xintoístas e budistas, cerejeiras em flor, neblina em vales.
+
+ESTILO THUMBNAIL JAPÃO FEUDAL: Photorealistic professional photograph shot with Sony A7R IV, 50mm f/1.2 lens, cena centrada em um samurai em pé em frente a um portão torii ao amanhecer. Samurai: homem de 25-40 anos, rosto asiático japonês autêntico, expressão séria e concentrada, cabelo preso em topknot (chonmage), armadura lamelar samurai detalhada com placas, cordas e ornamentos, katana na mão ou na bainha. Fundo: cerejeiras em flor com pétalas caindo, neblina leve, montanhas ao fundo, luz dourada suave do sol nascente.
+
+CONSISTÊNCIA VISUAL CRÍTICA:
+- SEMPRE especifique traços faciais do samurai principal (formato dos olhos, nariz, maxilar, cicatrizes, idade aparente)
+- Use SEMPRE a mesma descrição para o protagonista em todas as cenas
+- Mantenha o estilo da armadura e da katana consistentes (cores, emblemas, estado de conservação)
+
+ELEMENTOS AUTÊNTICOS DO JAPÃO FEUDAL:
+• ARMADURAS: Armaduras samurai lamelares com placas sobrepostas, elmos kabuto, máscaras menpo
+• ARMAS: Katanas, wakizashis, naginatas, arcos yumi
+• ARQUITETURA: Castelos japoneses, portas torii, templos de madeira, casas com telhados de telha curva
+• NATUREZA: Cerejeiras, bambuzais, campos de arroz, rios calmos, neblina matinal
+
+CENÁRIOS:
+• CAMPOS DE BATALHA: Samurais em formação, poeira, bandeiras de clã (mon), cadáveres, armaduras danificadas
+• VILAS E ALDEIAS: Ruas de terra, casas simples, camponeses trabalhando
+• TEMPLOS E JARDINS: Jardins de pedras, lagos com carpas, pontes de madeira, lanternas de pedra
+
+ATMOSFERA E ILUMINAÇÃO:
+• HORÁRIOS CLÁSSICOS: Amanhecer com neblina, entardecer dourado, noite com lanternas de papel
+• CLIMA: Chuva fina sobre armaduras, neve em templos, vento balançando bandeiras de clãs
+• ESTÉTICA: Composições equilibradas, uso de linhas horizontais e verticais fortes, inspiração em cinema de Akira Kurosawa
+
+Para cada chunk do texto, crie uma cena fotorrealista que complemente perfeitamente o conteúdo narrado, destacando honra, dever, conflito interno, batalhas épicas e a beleza silenciosa do Japão Feudal.`
   }
 };
