@@ -341,7 +341,8 @@ export class TTSService {
         const response = await axios.post(url, payload, {
           headers: {
             'Content-Type': 'application/json'
-          }
+          },
+          timeout: TIMEOUTS.AUDIO_CONVERSION,
         });
 
         // A resposta é um array, pegar o primeiro elemento
@@ -538,7 +539,7 @@ export class TTSService {
     const savedFiles: string[] = [];
 
     const removeTap = this.logger.addTap((level, message) => {
-      if (level === 'warn' || level === 'error') {
+      if (level === 'info' || level === 'warn' || level === 'error') {
         onProgress({ status: 'log', level, message });
       }
     });
