@@ -3,11 +3,20 @@ import { randomUUID } from 'crypto';
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'error';
 
+export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
+
+export interface LogEntry {
+  level: LogLevel;
+  message: string;
+  at: number;
+}
+
 export interface ProgressEvent {
-  status: 'running' | 'done' | 'error';
+  status: 'running' | 'done' | 'error' | 'log';
   processed?: number;
   total?: number;
   message?: string;
+  level?: LogLevel;
 }
 
 export interface JobState {
@@ -17,6 +26,7 @@ export interface JobState {
   total: number;
   audio?: Buffer;
   errorMessage?: string;
+  logs: LogEntry[];
   subscribers: Array<(event: ProgressEvent) => void>;
   createdAt: Date;
   finishedAt?: Date;
@@ -48,6 +58,7 @@ export class JobService {
       status: 'pending',
       processed: 0,
       total: 0,
+      logs: [],
       subscribers: [],
       createdAt: new Date(),
     };
@@ -68,6 +79,12 @@ export class JobService {
     const job = this.jobs.get(id);
     if (!job) return () => {};
     job.subscribers.push(fn);
+
+    // Replay buffered logs first so late subscribers see prior errors.
+    for (const log of job.logs) {
+      fn({ status: 'log', level: log.level, message: log.message });
+    }
+
     if (job.status === 'running' && job.total > 0) {
       fn({ status: 'running', processed: job.processed, total: job.total });
     } else if (job.status === 'done') {
@@ -87,6 +104,15 @@ export class JobService {
         if (event.status === 'running') {
           state.processed = event.processed ?? state.processed;
           state.total = event.total ?? state.total;
+        } else if (event.status === 'log' && event.message) {
+          const entry: LogEntry = {
+            level: event.level ?? 'info',
+            message: event.message,
+            at: Date.now(),
+          };
+          state.logs.push(entry);
+          // Cap log buffer to avoid unbounded memory growth.
+          if (state.logs.length > 200) state.logs.shift();
         }
         for (const sub of state.subscribers) sub(event);
       });

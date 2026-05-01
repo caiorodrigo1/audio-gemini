@@ -524,7 +524,7 @@ export class TTSService {
   async generateFromText(
     text: string,
     voiceName: string,
-    onProgress: (event: { processed: number; total: number; status: 'running' | 'done' | 'error'; message?: string }) => void,
+    onProgress: (event: { processed?: number; total?: number; status: 'running' | 'done' | 'error' | 'log'; message?: string; level?: 'info' | 'warn' | 'error' | 'debug' }) => void,
   ): Promise<Buffer> {
     if (!text || !text.trim()) {
       throw new Error('Texto vazio');
@@ -536,6 +536,12 @@ export class TTSService {
 
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'audio-gemini-job-'));
     const savedFiles: string[] = [];
+
+    const removeTap = this.logger.addTap((level, message) => {
+      if (level === 'warn' || level === 'error') {
+        onProgress({ status: 'log', level, message });
+      }
+    });
 
     try {
       for (let i = 0; i < chunks.length; i++) {
@@ -559,6 +565,7 @@ export class TTSService {
       onProgress({ processed: 0, total, status: 'error', message: err?.message ?? 'Erro desconhecido' });
       throw err;
     } finally {
+      removeTap();
       try {
         await fs.rm(tmpDir, { recursive: true, force: true });
       } catch {

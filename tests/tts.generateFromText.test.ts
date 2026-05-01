@@ -4,6 +4,7 @@ describe('TTSService.generateFromText', () => {
   function makeService(): TTSService {
     const svc = Object.create(TTSService.prototype) as TTSService;
     (svc as any).useFishAudio = false;
+    (svc as any).logger = { addTap: () => () => {} };
 
     (svc as any).splitTextIntoChunks = (text: string) => {
       return [

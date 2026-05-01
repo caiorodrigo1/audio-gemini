@@ -29,3 +29,8 @@ progress { width: 100%; height: 14px; }
 #progressPct { display: inline-block; margin-left: 8px; color: var(--muted); }
 #errorMessage { color: var(--error); margin-bottom: 8px; }
 audio { width: 100%; margin: 8px 0; }
+.log-area { margin-top: 12px; max-height: 200px; overflow-y: auto; background: #0c0e13; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; }
+.log-area:empty { display: none; }
+.log-line { white-space: pre-wrap; word-break: break-word; }
+.log-line.warn { color: #ffd166; }
+.log-line.error { color: var(--error); }

@@ -16,7 +16,17 @@ const els = {
   newBtn: $('newBtn'),
   errorMessage: $('errorMessage'),
   retryBtn: $('retryBtn'),
+  logArea: $('logArea'),
 };
+
+function appendLog(level, message) {
+  const line = document.createElement('div');
+  line.className = `log-line ${level}`;
+  const ts = new Date().toLocaleTimeString();
+  line.textContent = `[${ts}] ${message}`;
+  els.logArea.appendChild(line);
+  els.logArea.scrollTop = els.logArea.scrollHeight;
+}
 
 let currentJobId = null;
 let currentEventSource = null;
@@ -79,12 +89,14 @@ function reset() {
   els.progressBar.value = 0;
   els.progressPct.textContent = '0%';
   els.progressStatus.textContent = 'Iniciando...';
+  els.logArea.innerHTML = '';
   updateCount();
 }
 
 async function generate() {
   const text = els.text.value;
   const voiceName = els.voice.value;
+  els.logArea.innerHTML = '';
   showProgress();
   els.generate.disabled = true;
   try {
@@ -103,6 +115,10 @@ async function generate() {
     currentEventSource = new EventSource(`/api/jobs/${jobId}/events`);
     currentEventSource.onmessage = (ev) => {
       const data = JSON.parse(ev.data);
+      if (data.status === 'log') {
+        appendLog(data.level || 'info', data.message || '');
+        return;
+      }
       if (data.status === 'running') {
         const { processed = 0, total = 0 } = data;
         const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
