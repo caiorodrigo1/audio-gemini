@@ -345,29 +345,29 @@ export class TTSService {
           timeout: TIMEOUTS.AUDIO_CONVERSION,
         });
 
-        // A resposta é um array, pegar o primeiro elemento
-        const responseData = Array.isArray(response.data) ? response.data[0] : response.data;
-        
-        // Verificar se a resposta tem a estrutura esperada
-        if (!responseData || !responseData.candidates || !responseData.candidates[0]) {
-          throw new Error(`Resposta inválida da API - sem candidates: ${JSON.stringify(responseData)}`);
+        // streamGenerateContent retorna um array de partes; concatenar todos
+        // os pedaços de inlineData.data antes de retornar.
+        const parts = Array.isArray(response.data) ? response.data : [response.data];
+        const audioBuffers: Buffer[] = [];
+
+        for (const part of parts) {
+          const inlineData = part?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+          if (inlineData?.data) {
+            audioBuffers.push(Buffer.from(inlineData.data, 'base64'));
+          }
         }
 
-        if (!responseData.candidates[0].content || !responseData.candidates[0].content.parts || !responseData.candidates[0].content.parts[0]) {
-          throw new Error(`Resposta inválida da API - sem content/parts: ${JSON.stringify(responseData.candidates[0])}`);
+        if (audioBuffers.length === 0) {
+          throw new Error(`Resposta inválida da API - sem inlineData: ${JSON.stringify(parts[0] ?? response.data)}`);
         }
 
-        if (!responseData.candidates[0].content.parts[0].inlineData || !responseData.candidates[0].content.parts[0].inlineData.data) {
-          throw new Error(`Resposta inválida da API - sem inlineData: ${JSON.stringify(responseData.candidates[0].content.parts[0])}`);
-        }
-
-        const audioData = responseData.candidates[0].content.parts[0].inlineData.data;
+        const merged = Buffer.concat(audioBuffers);
         if (attempt > 0) {
-          this.logger.info(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso na tentativa ${attempt + 1} (API key ${apiKeyIndex + 1})`);
+          this.logger.info(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso na tentativa ${attempt + 1} (API key ${apiKeyIndex + 1}) — ${audioBuffers.length} parte(s), ${merged.length} bytes`);
         } else {
-          this.logger.debug(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso (API key ${apiKeyIndex + 1})`);
+          this.logger.debug(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso (API key ${apiKeyIndex + 1}) — ${audioBuffers.length} parte(s), ${merged.length} bytes`);
         }
-        return Buffer.from(audioData, 'base64');
+        return merged;
         
       } catch (error) {
         lastError = error;
