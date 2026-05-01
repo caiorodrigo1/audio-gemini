@@ -23,7 +23,7 @@ npm run extract-token
 
 **O que acontece:**
 - ✅ Abre o browser automaticamente
-- ✅ Navega para o Whisk
+- ✅ Navega para o Whisk (labs.google/fx/tools/whisk)
 - ✅ Aguarda você fazer login (se necessário)
 - ✅ Extrai o token automaticamente
 - ✅ Salva no arquivo `.env`

@@ -7,7 +7,10 @@ import { RenderPreset } from './config/render.config';
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const consoleService = app.get(ConsoleService);
-  
+
+  // Verificar se foi passada a flag --audio-only (modo apenas áudio)
+  const audioOnly = process.argv.includes('--audio-only');
+
   // Verificar se foi passada a flag --fish-audio
   const useFishAudio = process.argv.includes('--fish-audio');
   
@@ -56,8 +59,13 @@ async function bootstrap() {
     console.log(`📁 Caminho personalizado fornecido: ${customPath}`);
   }
   
+  // Se --audio-only foi passado, modo apenas áudio
+  if (audioOnly) {
+    console.log('🎵 Modo AUDIO ONLY ativado - apenas geração de áudio a partir de texto');
+    await consoleService.audioOnly(useFishAudio);
+  }
   // Se --render foi passado, apenas renderizar
-  if (renderPath) {
+  else if (renderPath) {
     await consoleService.renderOnly(renderPath, renderPreset);
   } else {
     await consoleService.start(useFishAudio, concurrentBatches, renderPreset, customPath);

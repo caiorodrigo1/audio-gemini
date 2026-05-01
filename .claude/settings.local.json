@@ -21,7 +21,14 @@
       "WebFetch(domain:speech.fish.audio)",
       "Bash(/mcp list)",
       "Bash(claude mcp:*)",
-      "Bash(echo $MAX_CHUNK_LENGTH)"
+      "Bash(echo $MAX_CHUNK_LENGTH)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:whiskaitemplate.com)",
+      "WebFetch(domain:labs.google)",
+      "Bash(tree:*)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ],
     "deny": []
   }

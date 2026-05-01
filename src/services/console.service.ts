@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { TTSService } from './tts.service';
 import * as readline from 'readline';
 import * as path from 'path';
+import * as os from 'os';
 import { promises as fs } from 'fs';
 import { RenderPreset } from '../config/render.config';
 import { DELAYS } from '../constants';
@@ -9,6 +10,156 @@ import { DELAYS } from '../constants';
 @Injectable()
 export class ConsoleService {
   constructor(private readonly ttsService: TTSService) {}
+
+  async audioOnly(useFishAudio: boolean = false): Promise<void> {
+    console.log('\n🎵 AUDIO GEMINI TTS - MODO AUDIO ONLY');
+    console.log('=====================================');
+    console.log('Este modo gera apenas o áudio de narração a partir do texto.');
+    console.log('Sem imagens, sem vídeo - apenas o arquivo de áudio.\n');
+
+    // Conectar o TTS service com este console service e informar se deve usar Fish Audio
+    this.ttsService.setConsoleService(this);
+    await this.ttsService.setUseFishAudio(useFishAudio);
+
+    const platform = os.platform();
+    const defaultOutputPath = platform === 'darwin'
+      ? '/Users/caiosantos/Desktop'
+      : 'D:\\';
+
+    console.log('💡 Configurações ativas:');
+    console.log(`  • Fish Audio: ${useFishAudio ? 'Ativado' : 'Desativado'}`);
+    console.log(`  • API Keys disponíveis: ${this.ttsService.getApiKeysCount()}`);
+    console.log('');
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    let keepRunning = true;
+
+    while (keepRunning) {
+      // Pedir o texto ao usuário
+      console.log('📝 Cole o texto que deseja converter em áudio.');
+      console.log('   (Digite END em uma linha vazia para finalizar a entrada)\n');
+
+      const textLines: string[] = [];
+      let lineCount = 0;
+
+      const text = await new Promise<string>((resolve) => {
+        const readLine = () => {
+          rl.question('', (line: string) => {
+            if (line.trim().toUpperCase() === 'END') {
+              resolve(textLines.join('\n'));
+              return;
+            }
+            textLines.push(line);
+            lineCount++;
+            // Mostrar feedback a cada 10 linhas
+            if (lineCount % 10 === 0) {
+              console.log(`   ... ${lineCount} linhas recebidas`);
+            }
+            readLine();
+          });
+        };
+        readLine();
+      });
+
+      if (!text.trim()) {
+        console.log('\n⚠️  Texto vazio. Por favor, insira algum texto.\n');
+        continue;
+      }
+
+      console.log(`\n📊 Texto recebido: ${text.length} caracteres, ${textLines.length} linhas`);
+
+      // Perguntar onde salvar
+      const outputPath = await new Promise<string>((resolve) => {
+        console.log(`\n📁 Onde deseja salvar o áudio?`);
+        console.log(`   Pressione ENTER para usar o padrão: ${defaultOutputPath}`);
+        rl.question('   Caminho: ', (inputPath: string) => {
+          const trimmed = inputPath.trim();
+          resolve(trimmed || defaultOutputPath);
+        });
+      });
+
+      // Criar pasta com timestamp
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}_${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      const outputDir = path.join(outputPath, `audio_only_${timestamp}`);
+
+      try {
+        // Criar diretório de saída
+        await fs.mkdir(outputDir, { recursive: true });
+        console.log(`\n🗂️  Pasta de saída criada: ${outputDir}`);
+
+        // Dividir texto em chunks
+        const chunks = this.ttsService.splitTextIntoChunks(text);
+        console.log(`📦 Texto dividido em ${chunks.length} parte(s)`);
+
+        console.log('\n🎙️  Iniciando geração de áudio...\n');
+
+        // Processar cada chunk
+        const savedFiles: string[] = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          console.log(`   Processando parte ${i + 1}/${chunks.length}...`);
+
+          try {
+            const audioData = await this.ttsService.convertToSpeech(chunk);
+
+            // Converter para WAV se necessário (Google Gemini retorna raw audio)
+            let finalAudio: Buffer;
+            if (useFishAudio) {
+              finalAudio = audioData;
+            } else {
+              finalAudio = this.ttsService.convertToWav(audioData);
+            }
+
+            // Salvar arquivo
+            const filePath = await this.ttsService.saveAudioFile(finalAudio, chunk.chunkIndex, outputDir);
+            savedFiles.push(filePath);
+            console.log(`   ✓ Parte ${i + 1} salva: ${path.basename(filePath)}`);
+          } catch (error) {
+            console.error(`   ✗ Erro na parte ${i + 1}: ${error.message}`);
+          }
+        }
+
+        // Concatenar todos os áudios em um único arquivo
+        if (savedFiles.length > 0) {
+          console.log('\n🔗 Gerando arquivo de áudio final...');
+          const finalAudioPath = await this.ttsService.concatenateAudioFiles(savedFiles, outputDir, 'audio_final.wav');
+
+          console.log('\n✅ Conversão concluída!');
+          console.log(`📁 Pasta de saída: ${outputDir}`);
+          console.log(`🎵 Arquivo final: ${path.basename(finalAudioPath)}`);
+        } else {
+          console.log('\n⚠️  Nenhum áudio foi gerado com sucesso.');
+        }
+
+      } catch (error) {
+        console.error(`\n❌ Erro ao processar: ${error.message}`);
+      }
+
+      // Menu: continuar ou sair
+      const answer: string = await new Promise((resolve) => {
+        console.log('\n\nO que você deseja fazer agora?');
+        console.log('  1 - Converter outro texto em áudio');
+        console.log('  2 - Encerrar a aplicação');
+        rl.question('Escolha (1/2): ', (resp: string) => resolve(resp));
+      });
+
+      const choice = (answer || '2').trim();
+
+      if (choice === '1') {
+        console.log('\n🔄 Preparando para nova conversão...\n');
+      } else {
+        console.log('\n👋 Encerrando aplicação...');
+        keepRunning = false;
+      }
+    }
+
+    rl.close();
+  }
 
   async promptForNewToken(): Promise<string> {
     const rl = readline.createInterface({
@@ -166,16 +317,24 @@ export class ConsoleService {
 
   async promptForCustomPath(rl: readline.Interface): Promise<string> {
     return new Promise((resolve) => {
+      const platform = os.platform();
+      const defaultPath = platform === 'darwin'
+        ? '/Users/caiosantos/Movies/YT'
+        : 'D:\\Canais Dark\\CanaisAtivos';
+      const examplePath = platform === 'darwin'
+        ? '/Users/caiosantos/Movies/YT'
+        : 'D:\\Meus Canais\\Ativos';
+
       console.log('\n🔧 MODO PERSONALIZADO');
-      console.log('Digite o caminho completo da pasta raiz CanaisAtivos:');
-      console.log('Exemplo: D:\\Meus Canais\\Ativos');
+      console.log('Digite o caminho completo da pasta raiz:');
+      console.log(`Exemplo: ${examplePath}`);
       console.log('');
 
       rl.question('Caminho da pasta: ', (path: string) => {
         const trimmedPath = path.trim();
         if (!trimmedPath) {
           console.log('⚠️  Caminho vazio. Usando caminho padrão.');
-          resolve('D:\\Canais Dark\\CanaisAtivos');
+          resolve(defaultPath);
           return;
         }
 
@@ -190,8 +349,12 @@ export class ConsoleService {
     this.ttsService.setConsoleService(this);
     await this.ttsService.setUseFishAudio(useFishAudio);
 
-    const defaultPath = 'D:\\Canais Dark\\CanaisAtivos';
-    
+    // Detectar plataforma e usar caminho padrão apropriado
+    const platform = os.platform();
+    const defaultPath = platform === 'darwin'
+      ? '/Users/caiosantos/Movies/YT'
+      : 'D:\\Canais Dark\\CanaisAtivos';
+
     // Usar caminho personalizado se fornecido, senão usar padrão
     const selectedPath = customPath || defaultPath;
     
@@ -201,13 +364,22 @@ export class ConsoleService {
     if (customPath) {
       console.log('   (Caminho personalizado fornecido via --path=)');
     } else {
-      console.log('   (Caminho padrão - use --path="caminho" para personalizar)');
+      const platformName = platform === 'darwin' ? 'macOS' : 'Windows';
+      console.log(`   (Caminho padrão para ${platformName} - use --path="caminho" para personalizar)`);
     }
     console.log('');
     console.log('💡 Para usar um caminho personalizado, execute:');
-    console.log('   npm start -- --path="D:\\Seu\\Caminho\\Personalizado"');
+    if (platform === 'darwin') {
+      console.log('   npm start -- --path="/Seu/Caminho/Personalizado"');
+    } else {
+      console.log('   npm start -- --path="D:\\Seu\\Caminho\\Personalizado"');
+    }
     console.log('   ou');
-    console.log('   npm start -- --custom-path="D:\\Seu\\Caminho\\Personalizado"');
+    if (platform === 'darwin') {
+      console.log('   npm start -- --custom-path="/Seu/Caminho/Personalizado"');
+    } else {
+      console.log('   npm start -- --custom-path="D:\\Seu\\Caminho\\Personalizado"');
+    }
     console.log('');
 
     // Detectar automaticamente o número máximo de batches baseado nas API keys disponíveis
@@ -418,7 +590,11 @@ export class ConsoleService {
       }
     };
 
-    const createDateTimeFolder = async (baseDir: string = 'D:\\Canais Dark', fileName?: string): Promise<string> => {
+    const getDefaultBaseDir = (): string => {
+      return platform === 'darwin' ? '/Users/caiosantos/Movies' : 'D:\\Canais Dark';
+    };
+
+    const createDateTimeFolder = async (baseDir: string = getDefaultBaseDir(), fileName?: string): Promise<string> => {
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, '0');

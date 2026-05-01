@@ -86,9 +86,9 @@ export class WhiskAuthService {
       });
       
       console.log('🌐 Navegando para o Whisk...');
-      await page.goto('https://whisk.google.com/', { 
+      await page.goto('https://labs.google/fx/tools/whisk', {
         waitUntil: 'networkidle2',
-        timeout: 30000 
+        timeout: 30000
       });
       
       // Verificar se já está logado
@@ -111,9 +111,9 @@ export class WhiskAuthService {
       
       // Navegar para uma página que faça requests com token
       console.log('🔍 Procurando por requisições com token...');
-      await page.goto('https://whisk.google.com/create', { 
+      await page.goto('https://labs.google/fx/tools/whisk', {
         waitUntil: 'networkidle2',
-        timeout: 30000 
+        timeout: 30000
       });
       
       // Aguardar um pouco para capturar requests
