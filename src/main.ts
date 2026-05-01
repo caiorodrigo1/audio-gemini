@@ -1,10 +1,21 @@
 import 'reflect-metadata';
+import { join } from 'path';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ConsoleService } from './services/console.service';
 import { RenderPreset } from './config/render.config';
 
 async function bootstrap() {
+  if (process.argv.includes('--web')) {
+    const httpApp = await NestFactory.create<NestExpressApplication>(AppModule);
+    httpApp.useStaticAssets(join(process.cwd(), 'public'));
+    const port = parseInt(process.env.WEB_PORT ?? '3000', 10);
+    await httpApp.listen(port);
+    console.log(`🌐 Web UI rodando em http://localhost:${port}`);
+    return;
+  }
+
   const app = await NestFactory.createApplicationContext(AppModule);
   const consoleService = app.get(ConsoleService);
 

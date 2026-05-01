@@ -15,7 +15,8 @@
     "extract-token": "ts-node src/extract-token.ts",
     "extract-token-headless": "ts-node src/extract-token.ts --headless",
     "extract-token-with-creds": "ts-node src/extract-token.ts --email=seu_email@gmail.com --password=sua_senha",
-    "check-keys": "ts-node src/check-exhausted-keys.ts"
+    "check-keys": "ts-node src/check-exhausted-keys.ts",
+    "web": "ts-node src/main.ts --web"
   },
   "keywords": [],
   "author": "",
