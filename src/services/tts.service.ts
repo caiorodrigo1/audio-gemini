@@ -273,7 +273,7 @@ export class TTSService {
     return chunks;
   }
 
-  async convertToSpeech(chunk: TextChunk): Promise<Buffer> {
+  async convertToSpeech(chunk: TextChunk, voiceName?: string): Promise<Buffer> {
     // Se estiver usando Fish Audio, delegar para o FishAudioService
     if (this.useFishAudio) {
       return await this.fishAudioService.convertToSpeech(chunk);
@@ -324,7 +324,7 @@ export class TTSService {
           speech_config: {
             voice_config: {
               prebuilt_voice_config: {
-                voice_name: AUDIO_CONFIG.VOICE_NAME
+                voice_name: voiceName ?? AUDIO_CONFIG.VOICE_NAME
               }
             }
           }
