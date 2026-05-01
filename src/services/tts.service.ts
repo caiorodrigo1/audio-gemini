@@ -426,16 +426,9 @@ export class TTSService {
       this.logger.debug('Última resposta da API', lastError.response.data);
     }
     
-    // Tocar som de erro e parar a aplicação
     this.logger.error(`ERRO CRÍTICO: Chunk ${chunk.chunkIndex + 1} falhou após esgotar todas as ${totalKeys} API keys!`);
-    this.logger.error('Parando a aplicação...');
     this.playErrorSound();
-    
-    // Aguardar um pouco para o som tocar antes de sair
-    setTimeout(() => {
-      process.exit(1);
-    }, 2000);
-    
+
     throw lastError;
   }
 
