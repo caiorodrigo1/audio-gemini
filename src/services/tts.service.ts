@@ -306,8 +306,8 @@ export class TTSService {
       }
       
       
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${AUDIO_CONFIG.MODEL_NAME}:streamGenerateContent?key=${currentApiKey}`;
-      
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${AUDIO_CONFIG.MODEL_NAME}:generateContent?key=${currentApiKey}`;
+
       const payload = {
         contents: [
           {
@@ -320,12 +320,12 @@ export class TTSService {
           }
         ],
         generationConfig: {
-          responseModalities: ["audio"],
+          responseModalities: ["AUDIO"],
           temperature: 1,
-          speech_config: {
-            voice_config: {
-              prebuilt_voice_config: {
-                voice_name: voiceName ?? AUDIO_CONFIG.VOICE_NAME
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: voiceName ?? AUDIO_CONFIG.VOICE_NAME
               }
             }
           }
@@ -362,11 +362,7 @@ export class TTSService {
         }
 
         const merged = Buffer.concat(audioBuffers);
-        if (attempt > 0) {
-          this.logger.info(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso na tentativa ${attempt + 1} (API key ${apiKeyIndex + 1}) — ${audioBuffers.length} parte(s), ${merged.length} bytes`);
-        } else {
-          this.logger.debug(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso (API key ${apiKeyIndex + 1}) — ${audioBuffers.length} parte(s), ${merged.length} bytes`);
-        }
+        this.logger.info(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso (API key ${apiKeyIndex + 1}, tentativa ${attempt + 1}) — ${audioBuffers.length} parte(s), ${merged.length} bytes`);
         return merged;
         
       } catch (error) {
