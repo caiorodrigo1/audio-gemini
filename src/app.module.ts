@@ -6,8 +6,10 @@ import { FishAudioService } from './services/fish-audio.service';
 import { VoiceSelectorService } from './services/voice-selector.service';
 import { ModelSelectorService } from './services/model-selector.service';
 import { LoggerService } from './services/logger.service';
+import { WebModule } from './web/web.module';
 
 @Module({
+  imports: [WebModule],
   providers: [TTSService, ConsoleService, WhiskAuthService, FishAudioService, VoiceSelectorService, ModelSelectorService, LoggerService],
 })
 export class AppModule {}
