@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 import { promises as fs } from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { loadEnvConfig, EnvConfig } from '../config/env.config';
 import { IMAGE_PROMPTS, YT_CODE_MAPPING, GENERAL_PROMPT, PromptConfig } from '../config/prompts.config';
@@ -513,6 +514,57 @@ export class TTSService {
     }
     
     return results;
+  }
+
+  /**
+   * Generate audio from raw text in-memory. Reuses the chunking + conversion +
+   * concatenation pipeline by writing intermediate files to a temp dir, then
+   * reads the concatenated file into a Buffer and cleans up.
+   */
+  async generateFromText(
+    text: string,
+    voiceName: string,
+    onProgress: (event: { processed: number; total: number; status: 'running' | 'done' | 'error'; message?: string }) => void,
+  ): Promise<Buffer> {
+    if (!text || !text.trim()) {
+      throw new Error('Texto vazio');
+    }
+
+    const chunks = this.splitTextIntoChunks(text);
+    const total = chunks.length;
+    onProgress({ processed: 0, total, status: 'running' });
+
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'audio-gemini-job-'));
+    const savedFiles: string[] = [];
+
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const audioData = await this.convertToSpeech(chunk, voiceName);
+        const wav = this.convertToWav(audioData);
+        const filePath = await this.saveAudioFile(wav, chunk.chunkIndex, tmpDir);
+        savedFiles.push(filePath);
+        onProgress({ processed: i + 1, total, status: 'running' });
+      }
+
+      if (savedFiles.length === 0) {
+        throw new Error('Nenhum chunk gerado');
+      }
+
+      const finalPath = await this.concatenateAudioFiles(savedFiles, tmpDir, 'audio_final.wav');
+      const buffer = await fs.readFile(finalPath);
+      onProgress({ processed: total, total, status: 'done' });
+      return buffer;
+    } catch (err: any) {
+      onProgress({ processed: 0, total, status: 'error', message: err?.message ?? 'Erro desconhecido' });
+      throw err;
+    } finally {
+      try {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup errors
+      }
+    }
   }
 
   convertToWav(rawBuffer: Buffer): Buffer {
