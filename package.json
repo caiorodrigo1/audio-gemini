@@ -11,11 +11,12 @@
     "start:fish:fast": "ts-node src/main.ts --fish-audio --render-preset=fast",
     "start:custom": "ts-node src/main.ts --path=\"D:\\Seu\\Caminho\\Personalizado\"",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "extract-token": "ts-node src/extract-token.ts",
     "extract-token-headless": "ts-node src/extract-token.ts --headless",
     "extract-token-with-creds": "ts-node src/extract-token.ts --email=seu_email@gmail.com --password=sua_senha",
-    "check-keys": "ts-node src/check-exhausted-keys.ts"
+    "check-keys": "ts-node src/check-exhausted-keys.ts",
+    "web": "ts-node src/main.ts --web"
   },
   "keywords": [],
   "author": "",
@@ -31,13 +32,17 @@
     "pino": "^10.1.0",
     "pino-pretty": "^13.1.2",
     "reflect-metadata": "^0.2.2",
+    "replicate": "^1.4.0",
     "rxjs": "^7.8.2",
     "winston": "^3.18.3"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.0.13",
     "@types/puppeteer": "^7.0.4",
+    "jest": "^30.3.0",
     "puppeteer": "^24.16.2",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }

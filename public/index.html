@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Audio Gemini</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Audio Gemini</h1>
+      <p class="subtitle">Geração de áudio via Google Gemini TTS</p>
+    </header>
+
+    <section id="card-generate" class="card">
+      <label for="voice">Voz</label>
+      <select id="voice"></select>
+
+      <label for="text">Texto</label>
+      <textarea id="text" rows="10" placeholder="Cole aqui o texto para gerar o áudio..."></textarea>
+      <div class="counter"><span id="charCount">0</span> caracteres</div>
+
+      <button id="generate" disabled>Gerar áudio</button>
+    </section>
+
+    <section id="card-progress" class="card hidden">
+      <h2>Gerando áudio</h2>
+      <div id="progressStatus">Iniciando...</div>
+      <progress id="progressBar" max="100" value="0"></progress>
+      <span id="progressPct">0%</span>
+      <div id="logArea" class="log-area" aria-live="polite"></div>
+    </section>
+
+    <section id="card-result" class="card hidden">
+      <h2>Áudio gerado</h2>
+      <audio id="audioPlayer" controls></audio>
+      <div class="row">
+        <a id="downloadBtn" href="#" download>Download</a>
+        <button id="newBtn">Nova geração</button>
+      </div>
+    </section>
+
+    <section id="card-error" class="card error hidden">
+      <h2>Erro</h2>
+      <div id="errorMessage"></div>
+      <button id="retryBtn">Tentar de novo</button>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

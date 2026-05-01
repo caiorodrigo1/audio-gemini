@@ -2,7 +2,8 @@ export const AUDIO_CONFIG = {
   SAMPLE_RATE: 24000,
   NUM_CHANNELS: 1,
   BITS_PER_SAMPLE: 16,
-  VOICE_NAME: 'Algenib'
+  VOICE_NAME: 'Charon',
+  MODEL_NAME: 'gemini-3.1-flash-tts-preview'
 } as const;
 
 export const BATCH_SIZES = {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 import { promises as fs } from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { loadEnvConfig, EnvConfig } from '../config/env.config';
 import { IMAGE_PROMPTS, YT_CODE_MAPPING, GENERAL_PROMPT, PromptConfig } from '../config/prompts.config';
@@ -195,7 +196,7 @@ export class TTSService {
   getPromptStyleName(promptType: number): string {
     const promptNames = {
       0: 'Geral',
-      1: 'Wild West (EN-US)', 
+      1: 'Wild West (EN-US)',
       2: 'Old Man Chronicles (EN-US)',
       3: 'Pessoas Desaparecidas (PT-BR)',
       4: 'Bridgerton Inglês (EN)',
@@ -205,7 +206,7 @@ export class TTSService {
       8: 'Milionários Romeno (RO)',
       9: 'Bridgerton Brasileiro (PT-BR)',
       10: 'Jornada dos Santos - Humano até Santificação (IT)',
-      11: 'Temática Sobrenatural',
+      11: 'Histórias Emocionantes (PT-BR)',
       12: 'Heróis de Guerra'
     };
     return promptNames[promptType] || `Tipo ${promptType}`;
@@ -273,7 +274,7 @@ export class TTSService {
     return chunks;
   }
 
-  async convertToSpeech(chunk: TextChunk): Promise<Buffer> {
+  async convertToSpeech(chunk: TextChunk, voiceName?: string): Promise<Buffer> {
     // Se estiver usando Fish Audio, delegar para o FishAudioService
     if (this.useFishAudio) {
       return await this.fishAudioService.convertToSpeech(chunk);
@@ -305,8 +306,8 @@ export class TTSService {
       }
       
       
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:streamGenerateContent?key=${currentApiKey}`;
-      
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${AUDIO_CONFIG.MODEL_NAME}:generateContent?key=${currentApiKey}`;
+
       const payload = {
         contents: [
           {
@@ -319,12 +320,12 @@ export class TTSService {
           }
         ],
         generationConfig: {
-          responseModalities: ["audio"],
+          responseModalities: ["AUDIO"],
           temperature: 1,
-          speech_config: {
-            voice_config: {
-              prebuilt_voice_config: {
-                voice_name: AUDIO_CONFIG.VOICE_NAME
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: voiceName ?? AUDIO_CONFIG.VOICE_NAME
               }
             }
           }
@@ -340,32 +341,29 @@ export class TTSService {
         const response = await axios.post(url, payload, {
           headers: {
             'Content-Type': 'application/json'
-          }
+          },
+          timeout: TIMEOUTS.AUDIO_CONVERSION,
         });
 
-        // A resposta é um array, pegar o primeiro elemento
-        const responseData = Array.isArray(response.data) ? response.data[0] : response.data;
-        
-        // Verificar se a resposta tem a estrutura esperada
-        if (!responseData || !responseData.candidates || !responseData.candidates[0]) {
-          throw new Error(`Resposta inválida da API - sem candidates: ${JSON.stringify(responseData)}`);
+        // streamGenerateContent retorna um array de partes; concatenar todos
+        // os pedaços de inlineData.data antes de retornar.
+        const parts = Array.isArray(response.data) ? response.data : [response.data];
+        const audioBuffers: Buffer[] = [];
+
+        for (const part of parts) {
+          const inlineData = part?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+          if (inlineData?.data) {
+            audioBuffers.push(Buffer.from(inlineData.data, 'base64'));
+          }
         }
 
-        if (!responseData.candidates[0].content || !responseData.candidates[0].content.parts || !responseData.candidates[0].content.parts[0]) {
-          throw new Error(`Resposta inválida da API - sem content/parts: ${JSON.stringify(responseData.candidates[0])}`);
+        if (audioBuffers.length === 0) {
+          throw new Error(`Resposta inválida da API - sem inlineData: ${JSON.stringify(parts[0] ?? response.data)}`);
         }
 
-        if (!responseData.candidates[0].content.parts[0].inlineData || !responseData.candidates[0].content.parts[0].inlineData.data) {
-          throw new Error(`Resposta inválida da API - sem inlineData: ${JSON.stringify(responseData.candidates[0].content.parts[0])}`);
-        }
-
-        const audioData = responseData.candidates[0].content.parts[0].inlineData.data;
-        if (attempt > 0) {
-          this.logger.info(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso na tentativa ${attempt + 1} (API key ${apiKeyIndex + 1})`);
-        } else {
-          this.logger.debug(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso (API key ${apiKeyIndex + 1})`);
-        }
-        return Buffer.from(audioData, 'base64');
+        const merged = Buffer.concat(audioBuffers);
+        this.logger.info(`Chunk ${chunk.chunkIndex + 1} convertido com sucesso (API key ${apiKeyIndex + 1}, tentativa ${attempt + 1}) — ${audioBuffers.length} parte(s), ${merged.length} bytes`);
+        return merged;
         
       } catch (error) {
         lastError = error;
@@ -424,16 +422,9 @@ export class TTSService {
       this.logger.debug('Última resposta da API', lastError.response.data);
     }
     
-    // Tocar som de erro e parar a aplicação
     this.logger.error(`ERRO CRÍTICO: Chunk ${chunk.chunkIndex + 1} falhou após esgotar todas as ${totalKeys} API keys!`);
-    this.logger.error('Parando a aplicação...');
     this.playErrorSound();
-    
-    // Aguardar um pouco para o som tocar antes de sair
-    setTimeout(() => {
-      process.exit(1);
-    }, 2000);
-    
+
     throw lastError;
   }
 
@@ -515,6 +506,64 @@ export class TTSService {
     return results;
   }
 
+  /**
+   * Generate audio from raw text in-memory. Reuses the chunking + conversion +
+   * concatenation pipeline by writing intermediate files to a temp dir, then
+   * reads the concatenated file into a Buffer and cleans up.
+   */
+  async generateFromText(
+    text: string,
+    voiceName: string,
+    onProgress: (event: { processed?: number; total?: number; status: 'running' | 'done' | 'error' | 'log'; message?: string; level?: 'info' | 'warn' | 'error' | 'debug' }) => void,
+  ): Promise<Buffer> {
+    if (!text || !text.trim()) {
+      throw new Error('Texto vazio');
+    }
+
+    const chunks = this.splitTextIntoChunks(text);
+    const total = chunks.length;
+    onProgress({ processed: 0, total, status: 'running' });
+
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'audio-gemini-job-'));
+    const savedFiles: string[] = [];
+
+    const removeTap = this.logger.addTap((level, message) => {
+      if (level === 'info' || level === 'warn' || level === 'error') {
+        onProgress({ status: 'log', level, message });
+      }
+    });
+
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const audioData = await this.convertToSpeech(chunk, voiceName);
+        const wav = this.convertToWav(audioData);
+        const filePath = await this.saveAudioFile(wav, chunk.chunkIndex, tmpDir);
+        savedFiles.push(filePath);
+        onProgress({ processed: i + 1, total, status: 'running' });
+      }
+
+      if (savedFiles.length === 0) {
+        throw new Error('Nenhum chunk gerado');
+      }
+
+      const finalPath = await this.concatenateAudioFiles(savedFiles, tmpDir, 'audio_final.wav');
+      const buffer = await fs.readFile(finalPath);
+      onProgress({ processed: total, total, status: 'done' });
+      return buffer;
+    } catch (err: any) {
+      onProgress({ processed: 0, total, status: 'error', message: err?.message ?? 'Erro desconhecido' });
+      throw err;
+    } finally {
+      removeTap();
+      try {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+  }
+
   convertToWav(rawBuffer: Buffer): Buffer {
     const { SAMPLE_RATE, NUM_CHANNELS, BITS_PER_SAMPLE } = AUDIO_CONFIG;
     const byteRate = SAMPLE_RATE * NUM_CHANNELS * BITS_PER_SAMPLE / 8;
@@ -547,13 +596,62 @@ export class TTSService {
     if (this.useFishAudio) {
       return await this.fishAudioService.saveAudioFile(wavBuffer, chunkIndex, outputDir);
     }
-    
+
     // Caso contrário, usar a lógica original
     const fileName = `output_audio_${chunkIndex}.wav`;
     const filePath = path.join(outputDir, fileName);
-    
+
     await fs.writeFile(filePath, wavBuffer);
     return filePath;
+  }
+
+  async concatenateAudioFiles(audioFiles: string[], outputDir: string, outputFileName: string = 'audio_final.wav'): Promise<string> {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+
+    if (audioFiles.length === 0) {
+      throw new Error('Nenhum arquivo de áudio para concatenar');
+    }
+
+    // Se só tem um arquivo, apenas renomeia/copia
+    if (audioFiles.length === 1) {
+      const finalPath = path.join(outputDir, outputFileName);
+      await fs.copyFile(audioFiles[0], finalPath);
+      return finalPath;
+    }
+
+    // Criar arquivo de lista para concatenação do ffmpeg
+    const listFile = path.join(outputDir, 'audio_list.txt');
+    const listContent = audioFiles.map(file => `file '${file}'`).join('\n');
+    await fs.writeFile(listFile, listContent, 'utf-8');
+
+    const finalOutput = path.join(outputDir, outputFileName);
+
+    // Concatenar todos os áudios usando ffmpeg
+    const concatCommand = `ffmpeg -y -v error -f concat -safe 0 -i "${listFile}" -c copy "${finalOutput}"`;
+
+    console.log('🔗 Concatenando arquivos de áudio...');
+    await execAsync(concatCommand, { maxBuffer: 1024 * 1024 * 10 });
+
+    // Limpar arquivo de lista temporário
+    try {
+      await fs.unlink(listFile);
+    } catch (error) {
+      // Ignora erro ao deletar arquivo temporário
+    }
+
+    // Limpar arquivos individuais
+    console.log('🧹 Removendo arquivos de áudio individuais...');
+    for (const audioFile of audioFiles) {
+      try {
+        await fs.unlink(audioFile);
+      } catch (error) {
+        // Ignora erro ao deletar
+      }
+    }
+
+    return finalOutput;
   }
 
   playNotificationSound(): void {
@@ -891,32 +989,44 @@ export class TTSService {
 
   async analyzeCharacters(fullText: string, promptType: number): Promise<string> {
     const specializedPrompt = this.getSpecializedPrompt(promptType);
-    
-    const analysisPrompt = `Analise o seguinte texto e identifique os personagens principais e suas características físicas específicas.
-    
-TEXTO PARA ANÁLISE:
+
+    const analysisPrompt = `Analise o texto e crie FICHAS VISUAIS DETALHADAS para cada personagem.
+
+TEXTO:
 ${fullText}
 
-INSTRUÇÕES:
-- Identifique os personagens principais da história
-- Para cada personagem, extraia características físicas específicas mencionadas no texto
-- Se não houver descrições físicas específicas, crie características consistentes baseadas no contexto e tipo de história
-- Foque em: idade, cabelo (cor, estilo), olhos (cor, formato), rosto (formato, traços), altura, constituição física
-- Use o contexto cultural/temporal da história para criar características apropriadas
+PARA CADA PERSONAGEM, FORNEÇA:
 
-FORMATO DE RESPOSTA:
-PERSONAGEM 1: [Nome ou descrição]
-- Idade: [idade específica]
-- Cabelo: [cor, estilo, textura]
-- Olhos: [cor, formato]
-- Rosto: [formato, traços específicos]
-- Físico: [altura, constituição]
-- Outros detalhes: [cicatrizes, barba, etc.]
+PERSONAGEM: [Nome/Papel]
+- ID VISUAL: [identificador único, ex: "CHAR_MAE_45"]
+- IDADE: número exato (ex: 45 anos)
+- PELE: tom específico (olive, tan, fair, brown, dark brown)
+- CABELO: cor + textura + comprimento + estilo (ex: "dark wavy hair with gray strands at temples, shoulder length")
+- OLHOS: cor + formato (ex: "brown almond-shaped eyes with crow's feet")
+- ROSTO: formato + traços distintivos (ex: "oval face, slightly broad nose, full lips, defined cheekbones")
+- CORPO: altura aproximada + constituição (ex: "average height, slim build")
+- MARCAS DISTINTIVAS: rugas, cicatrizes, sinais, etc.
+- ROUPAS TÍPICAS: o que geralmente usa na história (ex: "simple cotton dress, apron")
+- EXPRESSÃO PADRÃO: expressão facial característica
 
-PERSONAGEM 2: [Nome ou descrição]
-- [mesma estrutura]
+IMPORTANTE:
+- Seja EXTREMAMENTE específico com termos em INGLÊS para uso direto nos prompts
+- Estas descrições serão usadas em TODAS as imagens para manter consistência
+- Se o texto não especificar, CRIE características plausíveis baseadas no contexto brasileiro
+- Para personagens brasileiros, use diversidade étnica realista
 
-Seja específico e detalhado para garantir consistência visual.`;
+EXEMPLO DE FICHA BEM FEITA:
+PERSONAGEM: Maria (Mãe)
+- ID VISUAL: CHAR_MARIA_45
+- IDADE: 45 anos
+- PELE: olive skin with sun spots
+- CABELO: dark wavy hair with gray strands, shoulder length, often in loose bun
+- OLHOS: warm brown almond-shaped eyes, slight crow's feet
+- ROSTO: oval face, slightly broad nose, full lips, worry lines on forehead
+- CORPO: 5'4", medium build, weathered hands from housework
+- MARCAS: small scar on left eyebrow, laugh lines around mouth
+- ROUPAS: simple floral cotton dress, kitchen apron, house slippers
+- EXPRESSÃO: nurturing and concerned, slight tired look`;
 
     try {
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
@@ -924,15 +1034,15 @@ Seja específico e detalhado para garantir consistência visual.`;
         messages: [
           {
             role: 'system',
-            content: `${specializedPrompt.systemPrompt} Você é especialista em identificar e descrever personagens para manter consistência visual em imagens.`
+            content: `Você é um diretor de casting cinematográfico especializado em criar fichas visuais ultra-detalhadas de personagens para manter consistência em produções fotorrealistas. Suas descrições serão usadas diretamente em prompts de IA para geração de imagens, então use termos em INGLÊS para características físicas.`
           },
           {
             role: 'user',
             content: analysisPrompt
           }
         ],
-        max_tokens: 800,
-        temperature: 0.3
+        max_tokens: 1500,
+        temperature: 0.2
       }, {
         headers: {
           'Authorization': `Bearer ${this.config.openaiApiKey}`,
@@ -994,7 +1104,7 @@ Seja específico e detalhado para garantir consistência visual.`;
     // Log do prompt sendo usado
     const promptNames = {
       0: 'Geral',
-      1: 'Wild West (EN-US)', 
+      1: 'Wild West (EN-US)',
       2: 'Old Man Chronicles (EN-US)',
       3: 'Pessoas Desaparecidas (PT-BR)',
       4: 'Bridgerton Inglês (EN)',
@@ -1004,7 +1114,7 @@ Seja específico e detalhado para garantir consistência visual.`;
       8: 'Milionários Romeno (RO)',
       9: 'Bridgerton Brasileiro (PT-BR)',
       10: 'Jornada dos Santos - Humano até Santificação (IT)',
-      11: 'Temática Sobrenatural',
+      11: 'Histórias Emocionantes (PT-BR)',
       12: 'Heróis de Guerra'
     };
     
@@ -1068,8 +1178,8 @@ REGRA CRÍTICA: Você deve retornar EXATAMENTE ${chunks.length} prompts numerado
           content: prompt
         }
       ],
-      max_tokens: 1500,
-      temperature: 0.7
+      max_tokens: 3000,
+      temperature: 0.4
     }, {
       headers: {
         'Authorization': `Bearer ${this.config.openaiApiKey}`,
@@ -1139,6 +1249,51 @@ Data de criação: ${new Date().toLocaleString('pt-BR')}
     console.log(`👥 Análise de personagens salva em: ${filePath}`);
   }
 
+  validatePromptQuality(prompt: string): { valid: boolean; issues: string[] } {
+    const issues: string[] = [];
+
+    // Verificar se começa com Photorealistic
+    if (!prompt.toLowerCase().startsWith('photorealistic')) {
+      issues.push('Não começa com "Photorealistic"');
+    }
+
+    // Verificar palavras proibidas (que não estejam em negative prompts)
+    const forbidden = ['cartoon', 'illustration', 'anime', 'drawing', 'painting', 'artistic', 'stylized'];
+    forbidden.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\b`, 'i');
+      if (regex.test(prompt) && !prompt.toLowerCase().includes('--no ' + word)) {
+        issues.push(`Contém palavra proibida: ${word}`);
+      }
+    });
+
+    // Verificar se tem descrição de ação (verbos visuais)
+    const actionVerbs = ['standing', 'sitting', 'walking', 'holding', 'looking', 'hugging', 'crying', 'smiling', 'reaching', 'running', 'lying', 'kneeling', 'embracing', 'touching', 'watching', 'staring', 'leaning'];
+    const hasAction = actionVerbs.some(verb => prompt.toLowerCase().includes(verb));
+    if (!hasAction) {
+      issues.push('Falta verbo de ação visual (standing, sitting, hugging, etc.)');
+    }
+
+    // Verificar comprimento mínimo (prompts muito curtos são vagos)
+    if (prompt.length < 200) {
+      issues.push(`Prompt muito curto (${prompt.length} caracteres, mínimo 200)`);
+    }
+
+    // Verificar se tem especificações técnicas de câmera
+    const technicalTerms = ['shot on', 'canon', 'sony', 'nikon', '85mm', '50mm', 'f/1.4', 'f/1.2', '8k', 'depth of field'];
+    const hasTechnical = technicalTerms.some(term => prompt.toLowerCase().includes(term));
+    if (!hasTechnical) {
+      issues.push('Falta especificações técnicas de câmera');
+    }
+
+    // Verificar se tem características físicas entre parênteses
+    const hasCharacterDescription = /\(\d+\s*(years old|anos)/.test(prompt);
+    if (!hasCharacterDescription) {
+      issues.push('Falta descrição de características físicas do personagem (idade, etc.)');
+    }
+
+    return { valid: issues.length === 0, issues };
+  }
+
   async generateImagesWithWhisk(prompts: string[], outputDir: string): Promise<void> {
     const imageGenTimer = new Timer('Geração individual de imagens');
     
@@ -1159,6 +1314,14 @@ Data de criação: ${new Date().toLocaleString('pt-BR')}
         imageGenTimer.log(`⏭️ Pulando prompt ${i + 1} (erro)`);
         skippedImages++;
         continue;
+      }
+
+      // Validar qualidade do prompt antes de gerar
+      const validation = this.validatePromptQuality(prompt);
+      if (!validation.valid) {
+        console.log(`⚠️ Prompt ${i + 1} tem problemas de qualidade:`);
+        validation.issues.forEach(issue => console.log(`   • ${issue}`));
+        console.log(`   Continuando mesmo assim...`);
       }
 
       // Tentar gerar imagem com correção automática de prompts inválidos
