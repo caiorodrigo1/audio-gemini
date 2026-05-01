@@ -306,7 +306,7 @@ export class TTSService {
       }
       
       
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:streamGenerateContent?key=${currentApiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${AUDIO_CONFIG.MODEL_NAME}:streamGenerateContent?key=${currentApiKey}`;
       
       const payload = {
         contents: [
