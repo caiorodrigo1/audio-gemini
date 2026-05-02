@@ -133,7 +133,7 @@ async function generate() {
         const audioUrl = `/api/jobs/${jobId}/audio`;
         els.audioPlayer.src = audioUrl;
         els.downloadBtn.href = audioUrl;
-        els.downloadBtn.setAttribute('download', `audio_${jobId}.wav`);
+        els.downloadBtn.setAttribute('download', `audio_${jobId}.mp3`);
         showResult();
       } else if (data.status === 'error') {
         currentEventSource.close();

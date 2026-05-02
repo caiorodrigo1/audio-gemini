@@ -74,8 +74,8 @@ export class WebController {
     if (job.status !== 'done' || !job.audio) {
       throw new NotFoundException('Áudio ainda não está pronto');
     }
-    res.setHeader('Content-Type', 'audio/wav');
-    res.setHeader('Content-Disposition', `attachment; filename="audio_${id}.wav"`);
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `attachment; filename="audio_${id}.mp3"`);
     res.send(job.audio);
   }
 }

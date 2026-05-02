@@ -547,7 +547,7 @@ export class TTSService {
         throw new Error('Nenhum chunk gerado');
       }
 
-      const finalPath = await this.concatenateAudioFiles(savedFiles, tmpDir, 'audio_final.wav');
+      const finalPath = await this.concatenateAudioFiles(savedFiles, tmpDir, 'audio_final.mp3');
       const buffer = await fs.readFile(finalPath);
       onProgress({ processed: total, total, status: 'done' });
       return buffer;
@@ -605,7 +605,7 @@ export class TTSService {
     return filePath;
   }
 
-  async concatenateAudioFiles(audioFiles: string[], outputDir: string, outputFileName: string = 'audio_final.wav'): Promise<string> {
+  async concatenateAudioFiles(audioFiles: string[], outputDir: string, outputFileName: string = 'audio_final.mp3'): Promise<string> {
     const { exec } = require('child_process');
     const util = require('util');
     const execAsync = util.promisify(exec);
@@ -614,11 +614,13 @@ export class TTSService {
       throw new Error('Nenhum arquivo de áudio para concatenar');
     }
 
-    // Se só tem um arquivo, apenas renomeia/copia
+    const finalOutput = path.join(outputDir, outputFileName);
+
+    // Se só tem um arquivo, converte diretamente para MP3
     if (audioFiles.length === 1) {
-      const finalPath = path.join(outputDir, outputFileName);
-      await fs.copyFile(audioFiles[0], finalPath);
-      return finalPath;
+      const convertCommand = `ffmpeg -y -v error -i "${audioFiles[0]}" -codec:a libmp3lame -qscale:a 2 "${finalOutput}"`;
+      await execAsync(convertCommand, { maxBuffer: 1024 * 1024 * 10 });
+      return finalOutput;
     }
 
     // Criar arquivo de lista para concatenação do ffmpeg
@@ -626,12 +628,10 @@ export class TTSService {
     const listContent = audioFiles.map(file => `file '${file}'`).join('\n');
     await fs.writeFile(listFile, listContent, 'utf-8');
 
-    const finalOutput = path.join(outputDir, outputFileName);
+    // Concatenar e converter para MP3 usando ffmpeg
+    const concatCommand = `ffmpeg -y -v error -f concat -safe 0 -i "${listFile}" -codec:a libmp3lame -qscale:a 2 "${finalOutput}"`;
 
-    // Concatenar todos os áudios usando ffmpeg
-    const concatCommand = `ffmpeg -y -v error -f concat -safe 0 -i "${listFile}" -c copy "${finalOutput}"`;
-
-    console.log('🔗 Concatenando arquivos de áudio...');
+    console.log('🔗 Concatenando e convertendo arquivos de áudio para MP3...');
     await execAsync(concatCommand, { maxBuffer: 1024 * 1024 * 10 });
 
     // Limpar arquivo de lista temporário
