@@ -306,29 +306,28 @@ export class TTSService {
       }
       
       
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${AUDIO_CONFIG.MODEL_NAME}:generateContent?key=${currentApiKey}`;
+      // Gemini 3.8 TTS usa a Interactions API (o endpoint :generateContent não é mais suportado)
+      const url = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 
       const payload = {
-        contents: [
+        model: AUDIO_CONFIG.MODEL_NAME,
+        input: [
           {
-            role: "user",
-            parts: [
+            type: 'user_input',
+            content: [
               {
+                type: 'text',
                 text: chunk.text
               }
             ]
           }
         ],
-        generationConfig: {
-          responseModalities: ["AUDIO"],
+        response_format: { type: 'audio' },
+        generation_config: {
           temperature: 1,
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: voiceName ?? AUDIO_CONFIG.VOICE_NAME
-              }
-            }
-          }
+          speech_config: [
+            { voice: voiceName ?? AUDIO_CONFIG.VOICE_NAME }
+          ]
         }
       };
 
@@ -340,25 +339,28 @@ export class TTSService {
 
         const response = await axios.post(url, payload, {
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'x-goog-api-key': currentApiKey
           },
           timeout: TIMEOUTS.AUDIO_CONVERSION,
         });
 
-        // streamGenerateContent retorna um array de partes; concatenar todos
-        // os pedaços de inlineData.data antes de retornar.
-        const parts = Array.isArray(response.data) ? response.data : [response.data];
+        // A Interactions API retorna o áudio em steps[].content[].data (base64).
+        // Requests unários vêm como WAV com header RIFF; extraímos o PCM cru
+        // porque convertToWav() adiciona o header depois.
+        const steps: any[] = response.data?.steps ?? [];
         const audioBuffers: Buffer[] = [];
 
-        for (const part of parts) {
-          const inlineData = part?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-          if (inlineData?.data) {
-            audioBuffers.push(Buffer.from(inlineData.data, 'base64'));
+        for (const step of steps) {
+          for (const content of step?.content ?? []) {
+            if (content?.data && (content.type === 'audio' || content.mime_type?.startsWith('audio/'))) {
+              audioBuffers.push(this.stripWavHeader(Buffer.from(content.data, 'base64')));
+            }
           }
         }
 
         if (audioBuffers.length === 0) {
-          throw new Error(`Resposta inválida da API - sem inlineData: ${JSON.stringify(parts[0] ?? response.data)}`);
+          throw new Error(`Resposta inválida da API - sem áudio: ${JSON.stringify(response.data).substring(0, 500)}`);
         }
 
         const merged = Buffer.concat(audioBuffers);
@@ -368,7 +370,8 @@ export class TTSService {
       } catch (error) {
         lastError = error;
         const isRateLimit = error.response?.status === 429;
-        const isQuotaError = error.response?.data?.[0]?.error?.code === 429;
+        const apiError = error.response?.data?.error ?? error.response?.data?.[0]?.error;
+        const isQuotaError = apiError?.code === 429;
         
         this.logger.error(`Tentativa ${attempt + 1} falhou para chunk ${chunk.chunkIndex + 1} (API key ${apiKeyIndex + 1}): ${error.message}`);
 
@@ -380,8 +383,10 @@ export class TTSService {
           }
         }
         
-        const isResourceExhausted = error.response?.data?.[0]?.error?.code === 429 ||
-                                   error.response?.data?.[0]?.error?.status === 'RESOURCE_EXHAUSTED' ||
+        // Interactions API: code é string ('resource_exhausted'); formato antigo: code 429 + status
+        const isResourceExhausted = isRateLimit ||
+                                   apiError?.code === 429 ||
+                                   String(apiError?.code ?? apiError?.status ?? '').toUpperCase() === 'RESOURCE_EXHAUSTED' ||
                                    (error.message && error.message.includes('RESOURCE_EXHAUSTED'));
 
         // Marcar esta key como esgotada se for resource exhausted (global para toda a execução)
@@ -562,6 +567,23 @@ export class TTSService {
         // ignore cleanup errors
       }
     }
+  }
+
+  /** Remove o header RIFF/WAV (se houver) e retorna só o PCM do chunk "data". */
+  private stripWavHeader(buffer: Buffer): Buffer {
+    if (buffer.length < 12 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WAVE') {
+      return buffer;
+    }
+    let offset = 12;
+    while (offset + 8 <= buffer.length) {
+      const chunkId = buffer.toString('ascii', offset, offset + 4);
+      const chunkSize = buffer.readUInt32LE(offset + 4);
+      if (chunkId === 'data') {
+        return buffer.subarray(offset + 8, Math.min(offset + 8 + chunkSize, buffer.length));
+      }
+      offset += 8 + chunkSize + (chunkSize % 2);
+    }
+    return buffer.subarray(44);
   }
 
   convertToWav(rawBuffer: Buffer): Buffer {

@@ -3,7 +3,7 @@ export const AUDIO_CONFIG = {
   NUM_CHANNELS: 1,
   BITS_PER_SAMPLE: 16,
   VOICE_NAME: 'Charon',
-  MODEL_NAME: 'gemini-3.1-flash-tts-preview'
+  MODEL_NAME: 'gemini-3.8-flash-tts'
 } as const;
 
 export const BATCH_SIZES = {

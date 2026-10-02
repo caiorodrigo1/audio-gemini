@@ -10,37 +10,28 @@ interface KeyStatus {
 }
 
 async function testApiKey(apiKey: string, index: number): Promise<KeyStatus> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:streamGenerateContent?key=${apiKey}`;
+  const url = 'https://generativelanguage.googleapis.com/v1beta/interactions';
   
   // Texto de teste curto para não consumir muito
   const payload = {
-    contents: [
+    model: AUDIO_CONFIG.MODEL_NAME,
+    input: [
       {
-        role: "user",
-        parts: [
-          {
-            text: "test"
-          }
-        ]
+        type: 'user_input',
+        content: [{ type: 'text', text: 'test' }]
       }
     ],
-    generationConfig: {
-      responseModalities: ["audio"],
-      temperature: 1,
-      speech_config: {
-        voice_config: {
-          prebuilt_voice_config: {
-            voice_name: AUDIO_CONFIG.VOICE_NAME
-          }
-        }
-      }
+    response_format: { type: 'audio' },
+    generation_config: {
+      speech_config: [{ voice: AUDIO_CONFIG.VOICE_NAME }]
     }
   };
 
   try {
     const response = await axios.post(url, payload, {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
       },
       timeout: 10000 // 10 segundos de timeout
     });
@@ -51,9 +42,10 @@ async function testApiKey(apiKey: string, index: number): Promise<KeyStatus> {
       status: 'working'
     };
   } catch (error: any) {
+    const apiError = error.response?.data?.error ?? error.response?.data?.[0]?.error;
     const isResourceExhausted = 
-      error.response?.data?.[0]?.error?.code === 429 ||
-      error.response?.data?.[0]?.error?.status === 'RESOURCE_EXHAUSTED' ||
+      apiError?.code === 429 ||
+      String(apiError?.code ?? apiError?.status ?? '').toUpperCase() === 'RESOURCE_EXHAUSTED' ||
       error.response?.status === 429 ||
       (error.message && error.message.includes('RESOURCE_EXHAUSTED'));
 
@@ -62,7 +54,7 @@ async function testApiKey(apiKey: string, index: number): Promise<KeyStatus> {
         index,
         key: apiKey.substring(0, 20) + '...',
         status: 'exhausted',
-        error: error.response?.data?.[0]?.error?.message || 'RESOURCE_EXHAUSTED'
+        error: apiError?.message || 'RESOURCE_EXHAUSTED'
       };
     }
 
