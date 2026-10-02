@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { WebController } from './web.controller';
 import { JobService } from './job.service';
+import { VoiceLibraryService } from './voice-library.service';
+import { VoicePreviewService } from './voice-preview.service';
 import { ttsRunnerProvider, TTS_RUNNER } from './tts-runner.provider';
 import { TTSService } from '../services/tts.service';
 import { WhiskAuthService } from '../services/whisk-auth.service';
@@ -18,6 +20,8 @@ import { LoggerService } from '../services/logger.service';
     VoiceSelectorService,
     ModelSelectorService,
     LoggerService,
+    VoiceLibraryService,
+    VoicePreviewService,
     ttsRunnerProvider,
     {
       provide: JobService,

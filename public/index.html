@@ -7,46 +7,112 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <main>
-    <header>
-      <h1>Audio Gemini</h1>
-      <p class="subtitle">Geração de áudio via Google Gemini TTS</p>
-    </header>
-
-    <section id="card-generate" class="card">
-      <label for="voice">Voz</label>
-      <select id="voice"></select>
-
-      <label for="text">Texto</label>
-      <textarea id="text" rows="10" placeholder="Cole aqui o texto para gerar o áudio..."></textarea>
-      <div class="counter"><span id="charCount">0</span> caracteres</div>
-
-      <button id="generate" disabled>Gerar áudio</button>
-    </section>
-
-    <section id="card-progress" class="card hidden">
-      <h2>Gerando áudio</h2>
-      <div id="progressStatus">Iniciando...</div>
-      <progress id="progressBar" max="100" value="0"></progress>
-      <span id="progressPct">0%</span>
-      <div id="logArea" class="log-area" aria-live="polite"></div>
-    </section>
-
-    <section id="card-result" class="card hidden">
-      <h2>Áudio gerado</h2>
-      <audio id="audioPlayer" controls></audio>
-      <div class="row">
-        <a id="downloadBtn" href="#" download>Download</a>
-        <button id="newBtn">Nova geração</button>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 10h2v4H3zm4-3h2v10H7zm4-4h2v18h-2zm4 4h2v10h-2zm4 3h2v4h-2z"/></svg>
+      </span>
+      <div>
+        <h1>Audio Gemini</h1>
+        <p class="subtitle">Texto em áudio com Gemini 3.8 Flash TTS</p>
       </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Coluna de vozes -->
+    <section class="panel voices-panel" aria-labelledby="voicesTitle">
+      <div class="panel-head">
+        <h2 id="voicesTitle">Voz</h2>
+        <span id="voiceCount" class="muted small"></span>
+      </div>
+
+      <div class="toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.41 1.4-5.4-5.39A8 8 0 1 1 10 2m0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12"/></svg>
+          <input id="fSearch" type="search" placeholder="Buscar: calm, documentary, warm..." aria-label="Buscar vozes" />
+        </div>
+        <select id="fLanguage" aria-label="Idioma"></select>
+        <div class="segmented" id="fGender" role="radiogroup" aria-label="Gênero">
+          <button type="button" data-value="" class="active">Todos</button>
+          <button type="button" data-value="male">Masc.</button>
+          <button type="button" data-value="female">Fem.</button>
+        </div>
+        <button type="button" id="fFav" class="fav-toggle" aria-pressed="false" title="Mostrar só as favoritas">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M12 17.3 6.2 21l1.6-6.6L2.6 10l6.8-.6L12 3l2.6 6.4 6.8.6-5.2 4.4 1.6 6.6z"/></svg>
+          Favoritas <span id="favCount" class="n">0</span>
+        </button>
+      </div>
+
+      <div class="chips-label">Presets</div>
+      <div id="presetChips" class="chips" role="radiogroup" aria-label="Presets de persona"></div>
+      <div id="roleChips" class="chips sub hidden" role="radiogroup" aria-label="Papel"></div>
+
+      <div id="voiceList" class="voice-list" role="listbox" aria-label="Vozes"></div>
+      <button id="moreBtn" type="button" class="ghost full hidden">Mostrar mais</button>
     </section>
 
-    <section id="card-error" class="card error hidden">
-      <h2>Erro</h2>
-      <div id="errorMessage"></div>
-      <button id="retryBtn">Tentar de novo</button>
-    </section>
+    <!-- Coluna de texto / geração -->
+    <div class="side">
+      <section id="card-generate" class="panel">
+        <div class="selected-voice" id="selectedVoice">
+          <div class="avatar" id="selAvatar">?</div>
+          <div class="sel-text">
+            <div class="sel-name" id="selName">Carregando vozes...</div>
+            <div class="sel-meta muted small" id="selMeta"></div>
+          </div>
+          <button type="button" class="icon-btn star" id="selFav" aria-label="Favoritar" disabled></button>
+          <button type="button" class="icon-btn" id="selPlay" title="Ouvir amostra" aria-label="Ouvir amostra" disabled>
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+          </button>
+        </div>
+
+        <label for="text" class="field-label">Texto</label>
+        <textarea id="text" rows="12" placeholder="Cole aqui o roteiro para gerar o áudio..."></textarea>
+        <div class="stats small muted">
+          <span><b id="charCount">0</b> caracteres</span>
+          <span><b id="wordCount">0</b> palavras</span>
+          <span>~<b id="duration">0:00</b> de áudio</span>
+        </div>
+
+        <button id="generate" class="primary full" disabled>
+          Gerar áudio <kbd>Ctrl</kbd><kbd>Enter</kbd>
+        </button>
+      </section>
+
+      <section id="card-progress" class="panel hidden">
+        <div class="panel-head">
+          <h2>Gerando áudio</h2>
+          <span id="progressPct" class="pct">0%</span>
+        </div>
+        <div class="bar"><div id="progressBar" class="bar-fill"></div></div>
+        <div id="progressStatus" class="muted small status">Iniciando...</div>
+        <details class="logs">
+          <summary>Logs</summary>
+          <div id="logArea" class="log-area" aria-live="polite"></div>
+        </details>
+      </section>
+
+      <section id="card-result" class="panel hidden">
+        <div class="panel-head">
+          <h2>Áudio pronto</h2>
+          <span class="badge ok">MP3</span>
+        </div>
+        <audio id="audioPlayer" controls></audio>
+        <div class="row">
+          <a id="downloadBtn" class="primary" href="#" download>Baixar MP3</a>
+          <button id="newBtn" class="ghost">Nova geração</button>
+        </div>
+      </section>
+
+      <section id="card-error" class="panel error hidden">
+        <h2>Erro</h2>
+        <div id="errorMessage"></div>
+        <button id="retryBtn" class="ghost">Tentar de novo</button>
+      </section>
+    </div>
   </main>
+
   <script src="/app.js"></script>
 </body>
 </html>
