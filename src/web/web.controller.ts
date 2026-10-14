@@ -7,13 +7,15 @@ import {
   NotFoundException,
   Param,
   Post,
+  Put,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { JobService } from './job.service';
-import { GenerateRequestBody, GenerateResponse, VoicesResponse } from './dto';
+import { GenerateRequestBody, GenerateResponse, LibraryVoice, VoicesResponse } from './dto';
 import { VoiceLibraryService } from './voice-library.service';
 import { VoicePreviewService } from './voice-preview.service';
+import { FavoritesService } from './favorites.service';
 
 const MAX_TEXT_LENGTH = parseInt(process.env.WEB_MAX_TEXT_LENGTH ?? '50000', 10);
 
@@ -23,7 +25,34 @@ export class WebController {
     @Inject(JobService) private readonly jobs: JobService,
     @Inject(VoiceLibraryService) private readonly voiceLibrary: VoiceLibraryService,
     @Inject(VoicePreviewService) private readonly voicePreview: VoicePreviewService,
+    @Inject(FavoritesService) private readonly favorites: FavoritesService,
   ) {}
+
+  @Get('/api/favorites')
+  listFavorites(): { favorites: string[] } {
+    return { favorites: this.favorites.list() };
+  }
+
+  @Put('/api/favorites')
+  saveFavorites(@Body() body: { favorites?: unknown }): { favorites: string[] } {
+    try {
+      return { favorites: this.favorites.save(body?.favorites) };
+    } catch (err: any) {
+      throw new BadRequestException(err.message);
+    }
+  }
+
+  /** Favoritas com os dados da voz (língua, gênero...), para clientes como o historia-clips. */
+  @Get('/api/favorites/voices')
+  async favoriteVoices(): Promise<VoicesResponse> {
+    const [voices, defaultId] = await Promise.all([
+      this.voiceLibrary.list(),
+      this.voiceLibrary.defaultVoiceId(),
+    ]);
+    const byId = new Map(voices.map(v => [v.id, v]));
+    const favorites = this.favorites.list().map(id => byId.get(id)).filter((v): v is LibraryVoice => !!v);
+    return { voices: favorites, default: defaultId };
+  }
 
   @Get('/api/voices')
   async voices(): Promise<VoicesResponse> {

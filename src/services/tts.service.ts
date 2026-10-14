@@ -16,6 +16,9 @@ import { LoggerService } from './logger.service';
 import { AUDIO_CONFIG, BATCH_SIZES, TIMEOUTS, FILE_PATTERNS, DELAYS, RETRY_CONFIG } from '../constants';
 import { RenderPreset, getRenderSettings } from '../config/render.config';
 
+/** Chunks gerados em paralelo na interface web (generateFromText) */
+const WEB_TTS_CONCURRENCY = parseInt(process.env.WEB_TTS_CONCURRENCY ?? '4', 10) || 1;
+
 
 @Injectable()
 export class TTSService {
@@ -539,14 +542,34 @@ export class TTSService {
     });
 
     try {
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        const audioData = await this.convertToSpeech(chunk, voiceName);
-        const wav = this.convertToWav(audioData);
-        const filePath = await this.saveAudioFile(wav, chunk.chunkIndex, tmpDir);
-        savedFiles.push(filePath);
-        onProgress({ processed: i + 1, total, status: 'running' });
+      // Processa vários chunks em paralelo (cada chunk já usa uma API key diferente).
+      // savedFiles é indexado pela posição para manter a ordem na concatenação.
+      const concurrency = Math.max(1, Math.min(WEB_TTS_CONCURRENCY, chunks.length));
+      let next = 0;
+      let processed = 0;
+      let failed = false;
+
+      const worker = async () => {
+        while (!failed && next < chunks.length) {
+          const i = next++;
+          const chunk = chunks[i];
+          try {
+            const audioData = await this.convertToSpeech(chunk, voiceName);
+            const wav = this.convertToWav(audioData);
+            savedFiles[i] = await this.saveAudioFile(wav, chunk.chunkIndex, tmpDir);
+          } catch (err) {
+            failed = true; // os outros workers param de pegar chunks novos
+            throw err;
+          }
+          processed++;
+          onProgress({ processed, total, status: 'running' });
+        }
+      };
+
+      if (concurrency > 1) {
+        this.logger.info(`Gerando ${total} chunk(s), ${concurrency} por vez`);
       }
+      await Promise.all(Array.from({ length: concurrency }, worker));
 
       if (savedFiles.length === 0) {
         throw new Error('Nenhum chunk gerado');

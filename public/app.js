@@ -30,6 +30,8 @@ const els = {
   logArea: $('logArea'),
   audioPlayer: $('audioPlayer'),
   downloadBtn: $('downloadBtn'),
+  downloadNote: $('downloadNote'),
+  autoDownload: $('autoDownload'),
   newBtn: $('newBtn'),
   errorMessage: $('errorMessage'),
   retryBtn: $('retryBtn'),
@@ -38,6 +40,7 @@ const els = {
 const STUDIO = '__studio__';
 const STORAGE_KEY = 'audio-gemini:ui';
 const FAVORITES_KEY = 'audio-gemini:favorites';
+const AUTO_DOWNLOAD_KEY = 'audio-gemini:auto-download';
 const PAGE_SIZE = 60;
 const WORDS_PER_MINUTE = 150;
 
@@ -107,15 +110,39 @@ function loadState() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; }
 }
 
-function loadFavorites() {
+function loadLocalFavorites() {
   try {
     const ids = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-    return new Set(Array.isArray(ids) ? ids : []);
-  } catch { return new Set(); }
+    return Array.isArray(ids) ? ids : [];
+  } catch { return []; }
+}
+
+// Favoritas vivem no servidor (o historia-clips lê de lá); o localStorage é só cache.
+// Na primeira vez, as favoritas que estavam só no navegador sobem para o servidor.
+async function loadFavorites() {
+  const local = loadLocalFavorites();
+  try {
+    const res = await fetch('/api/favorites');
+    const { favorites } = await res.json();
+    if (favorites.length === 0 && local.length > 0) {
+      state.favorites = new Set(local);
+      saveFavorites();
+      return state.favorites;
+    }
+    return new Set(favorites);
+  } catch {
+    return new Set(local);
+  }
 }
 
 function saveFavorites() {
-  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify([...state.favorites])); } catch {}
+  const ids = [...state.favorites];
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids)); } catch {}
+  fetch('/api/favorites', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ favorites: ids }),
+  }).catch(() => {});
 }
 
 const isFavorite = (id) => state.favorites.has(id);
@@ -413,6 +440,25 @@ function updateCount() {
   els.generate.disabled = !text.trim() || !state.selectedId || currentJobId !== null;
 }
 
+// Nome do arquivo: começo do texto + voz + data, ex.: "era-uma-vez-numa-fazenda_charon_2026-10-02_1830.mp3"
+function audioFileName(text, voiceId) {
+  const slug = (s, max) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, max).replace(/-+$/, '');
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+  const words = text.trim().split(/\s+/).slice(0, 6).join(' ');
+  return [slug(words, 40) || 'audio', slug(voiceId, 30), stamp].filter(Boolean).join('_') + '.mp3';
+}
+
+function triggerDownload(url, fileName) {
+  const a = el('a', { href: url, download: fileName });
+  a.style.display = 'none';
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+
 function appendLog(level, message) {
   const line = el('div', { class: `log-line ${level}`, text: `[${new Date().toLocaleTimeString()}] ${message}` });
   els.logArea.append(line);
@@ -482,9 +528,16 @@ async function generate() {
         currentEventSource = null;
         currentJobId = null;
         const audioUrl = `/api/jobs/${jobId}/audio`;
+        const fileName = audioFileName(text, voiceName);
         els.audioPlayer.src = audioUrl;
         els.downloadBtn.href = audioUrl;
-        els.downloadBtn.setAttribute('download', `audio_${jobId}.mp3`);
+        els.downloadBtn.setAttribute('download', fileName);
+        els.downloadNote.classList.add('hidden');
+        if (els.autoDownload.checked) {
+          triggerDownload(audioUrl, fileName);
+          els.downloadNote.textContent = `✓ Download iniciado: ${fileName}`;
+          els.downloadNote.classList.remove('hidden');
+        }
         show(els.cardResult);
         updateCount();
       } else if (data.status === 'error') {
@@ -526,6 +579,11 @@ els.selFav.addEventListener('click', () => state.selectedId && toggleFavorite(st
 els.moreBtn.addEventListener('click', () => { state.limit += PAGE_SIZE; renderVoices(); });
 els.selPlay.addEventListener('click', () => state.selectedId && togglePreview(state.selectedId));
 
+try { els.autoDownload.checked = localStorage.getItem(AUTO_DOWNLOAD_KEY) !== 'false'; } catch {}
+els.autoDownload.addEventListener('change', () => {
+  try { localStorage.setItem(AUTO_DOWNLOAD_KEY, String(els.autoDownload.checked)); } catch {}
+});
+
 els.text.addEventListener('input', updateCount);
 els.text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generate(); });
 els.generate.addEventListener('click', generate);
@@ -554,7 +612,7 @@ async function init() {
     search: saved.search || '',
     onlyFavorites: !!saved.onlyFavorites,
   });
-  state.favorites = loadFavorites();
+  state.favorites = await loadFavorites();
   els.fSearch.value = state.search;
   state.selectedId = voiceById(saved?.selectedId)?.id || voiceById(state.defaultId)?.id || state.voices[0]?.id || null;
 

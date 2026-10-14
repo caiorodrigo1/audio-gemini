@@ -75,6 +75,11 @@
           <span>~<b id="duration">0:00</b> de áudio</span>
         </div>
 
+        <label class="check">
+          <input type="checkbox" id="autoDownload" checked />
+          Baixar automaticamente ao terminar
+        </label>
+
         <button id="generate" class="primary full" disabled>
           Gerar áudio <kbd>Ctrl</kbd><kbd>Enter</kbd>
         </button>
@@ -103,6 +108,7 @@
           <a id="downloadBtn" class="primary" href="#" download>Baixar MP3</a>
           <button id="newBtn" class="ghost">Nova geração</button>
         </div>
+        <div id="downloadNote" class="download-note hidden"></div>
       </section>
 
       <section id="card-error" class="panel error hidden">
