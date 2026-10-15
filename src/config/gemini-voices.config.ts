@@ -20,15 +20,3 @@ export const GEMINI_VOICES: GeminiVoice[] = [
 ];
 
 export const DEFAULT_GEMINI_VOICE_ID = 'Charon';
-
-export function isValidVoiceId(id: string): boolean {
-  return GEMINI_VOICES.some(v => v.id === id);
-}
-
-export function groupedVoices() {
-  return {
-    male:   GEMINI_VOICES.filter(v => v.gender === 'male').map(({ id, name, description }) => ({ id, name, description })),
-    female: GEMINI_VOICES.filter(v => v.gender === 'female').map(({ id, name, description }) => ({ id, name, description })),
-    default: DEFAULT_GEMINI_VOICE_ID,
-  };
-}

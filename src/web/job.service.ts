@@ -27,6 +27,8 @@ export interface JobState {
   audio?: Buffer;
   errorMessage?: string;
   logs: LogEntry[];
+  /** Nome do arquivo pedido pelo cliente da API compatível com ai33 */
+  fileName?: string;
   subscribers: Array<(event: ProgressEvent) => void>;
   createdAt: Date;
   finishedAt?: Date;

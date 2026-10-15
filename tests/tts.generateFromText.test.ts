@@ -4,7 +4,7 @@ describe('TTSService.generateFromText', () => {
   function makeService(): TTSService {
     const svc = Object.create(TTSService.prototype) as TTSService;
     (svc as any).useFishAudio = false;
-    (svc as any).logger = { addTap: () => () => {} };
+    (svc as any).logger = { addTap: () => () => {}, info: () => {} };
 
     (svc as any).splitTextIntoChunks = (text: string) => {
       return [
@@ -43,6 +43,28 @@ describe('TTSService.generateFromText', () => {
     expect(events[0]).toEqual({ status: 'running', processed: 0, total: 2 });
     expect(events.find((e) => e.processed === 2 && e.status === 'running')).toBeTruthy();
     expect(events[events.length - 1]).toMatchObject({ status: 'done' });
+  });
+
+  it('processes chunks in parallel and keeps the original order', async () => {
+    const svc = makeService();
+    (svc as any).splitTextIntoChunks = () =>
+      [0, 1, 2, 3, 4].map((i) => ({ text: `c${i}`, chunkIndex: i }));
+    let inFlight = 0;
+    let maxInFlight = 0;
+    // Chunks anteriores demoram mais, então terminam fora de ordem
+    (svc as any).convertToSpeech = async (chunk: any) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, (5 - chunk.chunkIndex) * 10));
+      inFlight--;
+      return Buffer.from(chunk.text);
+    };
+    (svc as any).convertToWav = (buf: Buffer) => buf;
+
+    const buffer = await svc.generateFromText('x', 'Charon', () => {});
+
+    expect(buffer.toString()).toBe('c0c1c2c3c4');
+    expect(maxInFlight).toBeGreaterThan(1);
   });
 
   it('rejects empty text', async () => {
