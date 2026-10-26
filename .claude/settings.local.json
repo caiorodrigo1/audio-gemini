@@ -28,7 +28,17 @@
       "WebFetch(domain:labs.google)",
       "Bash(tree:*)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Skill(watch:watch)",
+      "Bash(python \"/c/Users/caior/.claude/plugins/cache/claude-video/watch/0.1.3/scripts/watch.py\" \"https://www.youtube.com/watch?v=YN1ukBtSIOI\")",
+      "Bash(echo \"EXIT: $?\")",
+      "PowerShell('OfferAutomator_9h','OfferAutomator_12h','OfferAutomator_19h' | ForEach-Object { Disable-ScheduledTask -TaskName $_ | Select-Object TaskName, State })",
+      "PowerShell(schtasks *)",
+      "Bash(curl -s -m 5 http://127.0.0.1:8767/api/health)",
+      "Bash(tasklist)",
+      "Read(//c/Projects/historia-clips/**)",
+      "Bash(node -e ' *)",
+      "Read(//c/Users/caior/Documents/G-Labs Studio/output/webhook/image/**)"
     ],
     "deny": []
   }
